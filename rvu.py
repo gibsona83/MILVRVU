@@ -55,7 +55,25 @@ else:
 # Ensure date column is in datetime format
 df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 
-# Get the latest day’s data
+# Sidebar filters
+st.sidebar.header("Filters")
+date_selection = st.sidebar.date_input("Select a date range", [df['Date'].min(), df['Date'].max()], min_value=df['Date'].min(), max_value=df['Date'].max())
+
+# Dropdown for provider selection
+providers = ['ALL'] + list(df['Author'].unique())
+selected_providers = st.sidebar.multiselect("Select Providers", providers, default=['ALL'])
+
+# Filter data based on selections
+if isinstance(date_selection, tuple) or isinstance(date_selection, list):
+    start_date, end_date = date_selection
+    filtered_data = df[(df['Date'] >= pd.to_datetime(start_date)) & (df['Date'] <= pd.to_datetime(end_date))]
+else:
+    filtered_data = df[df['Date'] == pd.to_datetime(date_selection)]
+
+if 'ALL' not in selected_providers:
+    filtered_data = filtered_data[filtered_data['Author'].isin(selected_providers)]
+
+# Get latest day for KPIs
 latest_day = df['Date'].max()
 latest_data = df[df['Date'] == latest_day]
 
@@ -78,33 +96,26 @@ if not np.isnan(avg_turnaround):
 else:
     avg_turnaround_hms = "N/A"
 
-# Display KPI metrics
-col1, col2, col3 = st.columns(3)
+# Display KPI metrics with better spacing
+col1, col2, col3 = st.columns([1, 1, 1])
 col1.metric("Total Procedures", latest_data['Procedure'].sum())
 col2.metric("Total Points", latest_data['Points'].sum())
 col3.metric("Avg Turnaround Time", avg_turnaround_hms)
 
-# Sidebar filters
-st.sidebar.header("Filters")
-date_selection = st.sidebar.date_input("Select a date", latest_day, min_value=df['Date'].min(), max_value=df['Date'].max())
-provider_selection = st.sidebar.multiselect("Select Providers", df['Author'].unique(), default=df['Author'].unique())
-
-# Filter data based on selections
-filtered_data = df[df['Date'] == pd.to_datetime(date_selection)]
-if provider_selection:
-    filtered_data = filtered_data[filtered_data['Author'].isin(provider_selection)]
-
-# Visualization: Bar chart for productivity
+# Visualization: Bar chart for productivity with improved spacing and readability
 st.subheader("📈 Productivity by Provider")
-fig, ax = plt.subplots(figsize=(10, 5))
-filtered_data.groupby('Author')['Points'].sum().sort_values().plot(kind='barh', ax=ax, color='skyblue')
-ax.set_xlabel("Total Points")
-ax.set_ylabel("Provider")
-ax.set_title("Provider Productivity")
+fig, ax = plt.subplots(figsize=(12, 6))
+filtered_plot_data = filtered_data.groupby('Author')['Points'].sum().sort_values()
+filtered_plot_data.plot(kind='barh', ax=ax, color='skyblue', fontsize=10)
+ax.set_xlabel("Total Points", fontsize=12)
+ax.set_ylabel("Provider", fontsize=12)
+ax.set_title("Provider Productivity", fontsize=14)
+plt.xticks(fontsize=10)
+plt.yticks(fontsize=8)
 st.pyplot(fig)
 
 # Downloadable filtered data
-st.subheader(f"📂 Filtered Data for {date_selection}")
+st.subheader(f"📂 Filtered Data for {start_date} to {end_date}")
 st.dataframe(filtered_data)
 
 # Convert dataframe to CSV for download
