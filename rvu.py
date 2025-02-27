@@ -19,7 +19,10 @@ def load_data(uploaded_file):
     """Load and validate Excel data"""
     try:
         df = pd.read_excel(uploaded_file)
-        
+
+        # Remove unnamed columns
+        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+
         required_columns = ['Date', 'Author', 'Points', 'Turnaround', 'Procedure/half', 'shift']
         missing = [col for col in required_columns if col not in df.columns]
         if missing:
@@ -153,10 +156,12 @@ if uploaded_file:
             # Turnaround Time
             plot_rankings(daily_stats, 'Turnaround', 'Average Turnaround Time', ascending=True)
 
-            # Raw data
+            # Raw data - Remove unnamed columns
             st.subheader("Detailed Daily Performance")
+            cleaned_df = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col])
+
             st.dataframe(
-                df_filtered,
+                cleaned_df,
                 column_config={
                     "Date": "Date",
                     "Author": "Provider",
