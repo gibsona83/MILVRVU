@@ -11,18 +11,18 @@ LOGO_PATH = "milv.png"  # Path to MILV logo
 
 st.set_page_config(page_title="Daily Productivity Dashboard", layout="wide")
 
-# Display the MILV logo and title
-st.image(LOGO_PATH, width=250)
-st.title("Daily Productivity Report Dashboard")
+# Sidebar layout
+st.sidebar.image(LOGO_PATH, width=150)
+st.sidebar.title("Upload & Filters")
 
-# File upload section
-uploaded_file = st.file_uploader("Upload the latest RVU Daily Master file", type=["xlsx"])
+# File upload section in sidebar
+uploaded_file = st.sidebar.file_uploader("Upload RVU Daily Master", type=["xlsx"], help="Upload the latest RVU report")
 
 if uploaded_file is not None:
     # Save uploaded file for persistence
     with open(DATA_FILE, "wb") as f:
         f.write(uploaded_file.getbuffer())
-    st.success("File uploaded successfully!")
+    st.sidebar.success("File uploaded successfully!")
 
 # Load data from the last uploaded file
 if os.path.exists(DATA_FILE):
@@ -51,13 +51,13 @@ else:
     st.error("The column 'Turnaround' is missing in the dataset.")
     st.stop()
 
-# Handle blank shift values (NaN) - assign them a half-day shift for comparison but flag them as 'No Shift in Qgenda'
-df["shift"] = df["shift"].fillna(1).replace(0, 1)  # Assign a half-day shift for comparison purposes
+# Handle blank or zero shift values - assign them a half-day shift for comparison but flag them as 'No Shift in Qgenda'
+df["shift"] = df["shift"].fillna(1).replace(0, 1)  # Ensure no division by zero
 df["Shift Type"] = df["shift"].apply(lambda x: "No Shift in Qgenda" if x == 1 else "Scheduled Shift")
 
-# Compute per half-day metrics
-df["Points per Half-Day"] = df["Points"] / df["shift"]
-df["Procedures per Half-Day"] = df["Procedure"] / df["shift"]
+# Compute per half-day metrics safely
+df["Points per Half-Day"] = df["Points"].div(df["shift"], fill_value=1)
+df["Procedures per Half-Day"] = df["Procedure"].div(df["shift"], fill_value=1)
 
 # Sidebar filters
 st.sidebar.header("Filters")
