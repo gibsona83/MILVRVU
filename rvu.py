@@ -18,7 +18,7 @@ st.title("Radiology Productivity Analytics")
 def load_data(uploaded_file):
     """Load and validate Excel data"""
     try:
-        df = pd.read_excel(uploaded_file)
+        df = pd.read_excel(uploaded_file, sheet_name="powerscribe Data")
 
         # Remove unnamed columns
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
@@ -32,8 +32,11 @@ def load_data(uploaded_file):
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df = df.dropna(subset=['Date'])
         
-        numeric_cols = ['Points', 'Turnaround', 'Procedure/half', 'shift']
+        numeric_cols = ['Points', 'Procedure/half', 'shift']
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+
+        # Convert Turnaround Time (HH:MM:SS) to hours
+        df['Turnaround'] = pd.to_timedelta(df['Turnaround']).dt.total_seconds() / 3600
 
         # Assign "No Shift in Qgenda" to blank shifts
         df['Shift Status'] = df['shift'].apply(lambda x: "No Shift in Qgenda" if pd.isna(x) or x == 0 else "Scheduled Shift")
@@ -104,18 +107,21 @@ if uploaded_file:
                                                default=df['Day of Week'].unique())
                 df_filtered = df[df['Day of Week'].isin(selected_days)]
 
-            # Provider Dropdown with Select All Functionality
+            # Provider Dropdown with "ALL" Option
             provider_list = sorted(df_filtered['Author'].unique())
+            provider_options = ["ALL"] + provider_list
 
-            select_all = st.checkbox("Select All Providers", value=True)
-            selected_providers = provider_list if select_all else st.multiselect(
+            selected_providers = st.multiselect(
                 "Select Providers",
-                options=provider_list,
-                default=[],
+                options=provider_options,
+                default=["ALL"],
                 placeholder="Start typing to search..."
             )
 
-            if selected_providers:
+            # If "ALL" is selected, use all providers
+            if "ALL" in selected_providers or not selected_providers:
+                df_filtered = df_filtered[df_filtered['Author'].isin(provider_list)]
+            else:
                 df_filtered = df_filtered[df_filtered['Author'].isin(selected_providers)]
 
         if not df_filtered.empty:
@@ -123,7 +129,7 @@ if uploaded_file:
             daily_stats = df_filtered.groupby('Author').agg({
                 'Points': 'sum',
                 'Procedure/half': 'sum',
-                'Turnaround': 'mean'  # Ensuring TAT is pulled from the correct column
+                'Turnaround': 'mean'  # Now correctly converted to hours
             }).reset_index()
             
             daily_stats['Procedures/day'] = daily_stats['Procedure/half'] * 2
@@ -138,7 +144,7 @@ if uploaded_file:
             with col3:
                 avg_tat = daily_stats['Turnaround'].mean()
                 if pd.notna(avg_tat):
-                    st.metric("Avg Turnaround", f"{avg_tat:.1f} hrs")
+                    st.metric("Avg Turnaround", f"{avg_tat:.2f} hrs")
                 else:
                     st.metric("Avg Turnaround", "N/A")
 
@@ -165,7 +171,7 @@ if uploaded_file:
                 column_config={
                     "Date": "Date",
                     "Author": "Provider",
-                    "Turnaround": st.column_config.NumberColumn("Turnaround Time (hrs)", help="Avg TAT in hours", format="%.1f"),
+                    "Turnaround": st.column_config.NumberColumn("Turnaround Time (hrs)", help="Avg TAT in hours", format="%.2f"),
                     "shift": st.column_config.NumberColumn("Shift Value", help="0-2 scale based on shift length", format="%d ⏳"),
                     "Shift Status": "Shift Status"
                 },
@@ -178,7 +184,3 @@ if uploaded_file:
             
 else:
     st.info("👆 Upload RVU Daily Master Excel file to begin")
-
-# Footer
-st.divider()
-st.caption("MILV Radiology Analytics | Data refreshed daily at 8 AM EST")
