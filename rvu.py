@@ -46,7 +46,7 @@ if uploaded_file is not None:
 
 # Load data from the last uploaded file
 if os.path.exists(DATA_FILE):
-    df = pd.read_excel(DATA_FILE, engine="openpyxl")
+    df = pd.read_excel(DATA_FILE, sheet_name='powerscribe Data', engine="openpyxl")
     st.sidebar.info(f"Loaded data from: {DATA_FILE}")
 else:
     st.warning("No file uploaded yet. Please upload an RVU Daily Master file.")
@@ -79,33 +79,16 @@ latest_data = df[df['Date'] == latest_day]
 
 st.subheader(f"📊 Latest Day Overview: {latest_day.strftime('%Y-%m-%d')}")
 
-# Convert Turnaround Time from string to seconds
-def convert_time_to_seconds(time_str):
-    try:
-        h, m, s = map(int, time_str.split(":"))
-        return h * 3600 + m * 60 + s
-    except:
-        return np.nan  # Return NaN if conversion fails
-
-latest_data['Turnaround_Seconds'] = latest_data['Turnaround'].astype(str).apply(convert_time_to_seconds)
-avg_turnaround = latest_data['Turnaround_Seconds'].mean()
-
-# Convert back to H:M:S for display
-if not np.isnan(avg_turnaround):
-    avg_turnaround_hms = f"{int(avg_turnaround // 3600)}:{int((avg_turnaround % 3600) // 60)}:{int(avg_turnaround % 60)}"
-else:
-    avg_turnaround_hms = "N/A"
-
 # Display KPI metrics with tooltips
 col1, col2, col3 = st.columns([1, 1, 1])
 col1.metric("Total Procedures", latest_data['Procedure'].sum(), help="Total number of procedures completed on this date.")
 col2.metric("Total Points", latest_data['Points'].sum(), help="Custom productivity metric based on workload weighting.")
-col3.metric("Avg Turnaround Time", avg_turnaround_hms, help="Average time taken to complete a report, calculated from submission to finalization.")
+col3.metric("Avg Turnaround Time", latest_data['Turnaround'].mean(), help="Average time taken to complete a report, calculated from submission to finalization.")
 
 # Visualization: Bar chart for productivity per half day, with improved readability
 st.subheader("📈 Productivity per Half-Day")
 fig, ax = plt.subplots(figsize=(12, 6))
-filtered_plot_data = filtered_data.groupby('Author')['Points/half'].sum().sort_values()
+filtered_plot_data = filtered_data.groupby('Author')['Points/half day'].sum().sort_values()
 filtered_plot_data.plot(kind='barh', ax=ax, color='skyblue', fontsize=10)
 ax.set_xlabel("Total Points per Half-Day", fontsize=12)
 ax.set_ylabel("Provider", fontsize=12)
