@@ -1,127 +1,93 @@
 import streamlit as st
 import pandas as pd
-import os
-import matplotlib.pyplot as plt
-import seaborn as sns
-import datetime as dt
-import numpy as np
-import re
+from datetime import datetime
 
-# Streamlit page configuration
-st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
+# Configure page
+st.set_page_config(page_title="RVU Dashboard", layout="wide")
+st.title("Radiology Productivity Dashboard")
 
-# Load MILV logo
-MILV_LOGO_PATH = "milv.png"  # Ensure this file is in the same directory
-if os.path.exists(MILV_LOGO_PATH):
-    st.sidebar.image(MILV_LOGO_PATH)
+# File upload
+uploaded_file = st.file_uploader("Upload Daily RVU Report", type=["xlsx"])
 
-# MILV color scheme
-PRIMARY_COLOR = "#003366"  # Dark blue
-ACCENT_COLOR = "#0099CC"   # Light blue
-TEXT_COLOR = "#FFFFFF"     # White
+if uploaded_file:
+    # Read and process data
+    df = pd.read_excel(uploaded_file)
+    
+    # Convert Date column to datetime
+    df['Date'] = pd.to_datetime(df['Date']).dt.date
+    
+    # Show latest data first
+    df = df.sort_values('Date', ascending=False)
+    
+    # Sidebar filters
+    st.sidebar.header("Filters")
+    
+    # Date range filter
+    min_date = df['Date'].min()
+    max_date = df['Date'].max()
+    selected_date = st.sidebar.date_input(
+        "Select Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+    
+    # Author filter
+    all_authors = df['Author'].unique()
+    selected_authors = st.sidebar.multiselect(
+        "Select Radiologists",
+        all_authors,
+        default=all_authors
+    )
+    
+    # Apply filters
+    filtered_df = df[
+        (df['Date'].between(*selected_date)) &
+        (df['Author'].isin(selected_authors))
+    ]
+    
+    # KPIs
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Points", filtered_df['Points'].sum())
+    with col2:
+        st.metric("Average Turnaround", f"{filtered_df['Turnaround'].mean():.1f} hrs")
+    with col3:
+        st.metric("Avg Points/Half Day", f"{filtered_df['Points/half day'].mean():.1f}")
+    
+    # Main charts
+    tab1, tab2 = st.tabs(["Productivity Overview", "Detailed Data"])
+    
+    with tab1:
+        # Points by Author
+        st.subheader("Points by Radiologist")
+        author_points = filtered_df.groupby('Author')['Points'].sum().sort_values(ascending=False)
+        st.bar_chart(author_points)
+        
+        # Points vs Shift Value
+        st.subheader("Points vs Shift Hours")
+        shift_points = filtered_df.groupby('shift')['Points'].mean()
+        st.line_chart(shift_points)
+    
+    with tab2:
+        # Raw data table
+        st.subheader("Detailed Performance Data")
+        st.dataframe(
+            filtered_df,
+            column_order=["Date", "Author", "shift", "Points", 
+                         "Points/half day", "Procedure/half", "Turnaround"],
+            hide_index=True,
+            height=600
+        )
+        
+        # Download button
+        csv = filtered_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Filtered Data",
+            data=csv,
+            file_name="filtered_rvu_data.csv",
+            mime="text/csv"
+        )
 
-# File storage path
-UPLOAD_DIR = "./uploaded_files"
-SAVED_FILE_PATH = os.path.join(UPLOAD_DIR, "latest_uploaded_file.xlsx")
-
-# Ensure the directory exists
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-
-# Upload new file
-st.sidebar.header("Upload Daily RVU File")
-uploaded_file = st.sidebar.file_uploader("Upload Excel file", type=["xlsx"])
-
-if uploaded_file is not None:
-    with open(SAVED_FILE_PATH, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    st.sidebar.success("File uploaded successfully!")
-
-# Load the latest available file
-if os.path.exists(SAVED_FILE_PATH):
-    try:
-        df = pd.read_excel(SAVED_FILE_PATH, sheet_name="powerscribe Data")  # Load correct sheet
-        st.sidebar.info("Using the latest uploaded file.")
-    except Exception as e:
-        st.error(f"Error loading Excel file: {e}")
-        st.stop()
 else:
-    st.warning("No file uploaded yet. Please upload an Excel file.")
-    st.stop()
-
-# Convert date column to datetime
-df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
-
-# Handle Turnaround Time Conversion
-def convert_turnaround(value):
-    if pd.isna(value) or value == "":
-        return np.nan
-    try:
-        if isinstance(value, str):
-            match = re.match(r"(\d+)\.(\d+):(\d+):(\d+)", value)
-            if match:
-                days, hours, minutes, seconds = map(int, match.groups())
-                return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds
-            return pd.to_timedelta(value).total_seconds()
-        elif isinstance(value, dt.time):
-            return value.hour * 3600 + value.minute * 60 + value.second
-        elif isinstance(value, (dt.timedelta, pd.Timedelta)):
-            return value.total_seconds()
-        return float(value)  # Handle numeric values directly
-    except Exception:
-        return np.nan
-
-df["Turnaround"] = df["Turnaround"].apply(convert_turnaround)
-
-# Sidebar filtering options
-st.sidebar.header("Filters")
-st.sidebar.subheader("Date Filters")
-selected_date = st.sidebar.date_input("Select a Single Date", df["Date"].max())
-date_range = st.sidebar.date_input("Select Date Range", [])
-selected_day_of_week = st.sidebar.multiselect("Select Day of the Week", options=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], default=[])
-selected_month = st.sidebar.multiselect("Select Month", options=df["Date"].dt.month_name().unique(), default=[])
-
-st.sidebar.subheader("Provider Selection")
-selected_providers = st.sidebar.multiselect("Select Providers", options=df["Author"].unique(), default=df["Author"].unique())
-
-# Apply filters
-filtered_data = df[df["Author"].isin(selected_providers)]
-if date_range:
-    filtered_data = filtered_data[(filtered_data["Date"] >= pd.to_datetime(date_range[0])) &
-                                  (filtered_data["Date"] <= pd.to_datetime(date_range[1]))]
-if selected_day_of_week:
-    filtered_data = filtered_data[filtered_data["Date"].dt.day_name().isin(selected_day_of_week)]
-if selected_month:
-    filtered_data = filtered_data[filtered_data["Date"].dt.month_name().isin(selected_month)]
-
-# Compute Points per Day and Procedures per Day
-filtered_data["Points per Day"] = filtered_data["Points/half day"] * 2
-filtered_data["Procedures per Day"] = filtered_data["Procedure/half"] * 2
-
-# Default number of providers for visualization clarity
-default_top_n = 10
-
-# Display selected filters
-st.markdown(f"<h3 style='color: {PRIMARY_COLOR};'>Showing data for:</h3>", unsafe_allow_html=True)
-st.write(f"Date: {selected_date}")
-st.write(f"Date Range: {date_range}")
-st.write(f"Day of Week: {', '.join(selected_day_of_week) if selected_day_of_week else 'All'}")
-st.write(f"Month: {', '.join(selected_month) if selected_month else 'All'}")
-
-# Create side-by-side visualizations for top and bottom performers
-st.markdown(f"<h2 style='color: {ACCENT_COLOR}; text-align:center;'>Top & Bottom Performers by Turnaround Time</h2>", unsafe_allow_html=True)
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-top_tat = filtered_data.nsmallest(default_top_n, "Turnaround")
-bottom_tat = filtered_data.nlargest(default_top_n, "Turnaround")
-
-sns.barplot(y=top_tat["Author"], x=top_tat["Turnaround"], ax=axes[0], color=ACCENT_COLOR)
-axes[0].set_title("Fastest Turnaround (Lower is Better)")
-axes[0].set_xlabel("Turnaround Time (seconds)")
-
-sns.barplot(y=bottom_tat["Author"], x=bottom_tat["Turnaround"], ax=axes[1], color=PRIMARY_COLOR)
-axes[1].set_title("Slowest Turnaround")
-axes[1].set_xlabel("Turnaround Time (seconds)")
-
-plt.tight_layout()
-st.pyplot(fig)
+    st.info("👆 Upload the latest RVU Daily Master.xlsx file to begin")
