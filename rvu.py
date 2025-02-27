@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
+import io
 
 # Define storage file for persistence
 DATA_FILE = "latest_rvu_data.xlsx"
@@ -43,7 +45,7 @@ if uploaded_file is not None:
 
 # Load data from the last uploaded file
 if os.path.exists(DATA_FILE):
-    df = pd.read_excel(DATA_FILE)
+    df = pd.read_excel(DATA_FILE, engine="openpyxl")
     st.sidebar.info(f"Loaded data from: {DATA_FILE}")
 else:
     st.warning("No file uploaded yet. Please upload an RVU Daily Master file.")
@@ -56,18 +58,40 @@ df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 latest_day = df['Date'].max()
 latest_data = df[df['Date'] == latest_day]
 
-st.subheader(f"Latest Day Overview: {latest_day.strftime('%Y-%m-%d')}")
-st.dataframe(latest_data)
+st.subheader(f"📊 Latest Day Overview: {latest_day.strftime('%Y-%m-%d')}")
+
+# Display KPI metrics
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Procedures", latest_data['Procedure'].sum())
+col2.metric("Total Points", latest_data['Points'].sum())
+col3.metric("Avg Turnaround Time", latest_data['Turnaround'].mean())
 
 # Sidebar filters
 st.sidebar.header("Filters")
 date_selection = st.sidebar.date_input("Select a date", latest_day, min_value=df['Date'].min(), max_value=df['Date'].max())
-provider_selection = st.sidebar.multiselect("Select Providers", df['Author'].unique())
+provider_selection = st.sidebar.multiselect("Select Providers", df['Author'].unique(), default=df['Author'].unique())
 
 # Filter data based on selections
 filtered_data = df[df['Date'] == pd.to_datetime(date_selection)]
 if provider_selection:
     filtered_data = filtered_data[filtered_data['Author'].isin(provider_selection)]
 
-st.subheader(f"Filtered Data for {date_selection}")
+# Visualization: Bar chart for productivity
+st.subheader("📈 Productivity by Provider")
+fig, ax = plt.subplots(figsize=(10, 5))
+filtered_data.groupby('Author')['Points'].sum().sort_values().plot(kind='barh', ax=ax, color='skyblue')
+ax.set_xlabel("Total Points")
+ax.set_ylabel("Provider")
+ax.set_title("Provider Productivity")
+st.pyplot(fig)
+
+# Downloadable filtered data
+st.subheader(f"📂 Filtered Data for {date_selection}")
 st.dataframe(filtered_data)
+
+# Convert dataframe to CSV for download
+csv = filtered_data.to_csv(index=False)
+buffer = io.BytesIO()
+buffer.write(csv.encode())
+buffer.seek(0)
+st.download_button("Download Filtered Data as CSV", buffer, "filtered_data.csv", "text/csv", key='download-csv')
