@@ -46,22 +46,19 @@ def plot_rankings(data, metric, title, ascending=False):
         
     sorted_data = data.sort_values(metric, ascending=ascending).dropna(subset=[metric])
     
-    # Exclude providers with shift=0 or missing data
-    valid_data = sorted_data[sorted_data['shift'] > 0]
-    
-    if valid_data.empty:
+    if sorted_data.empty:
         st.warning(f"No data available for {title}")
         return
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
     
     # Top performers
-    top = valid_data.head(5)
+    top = sorted_data.head(5)
     sns.barplot(x=metric, y='Author', data=top, ax=ax1, palette='viridis')
     ax1.set_title(f'Top 5 {title}')
     
     # Bottom performers
-    bottom = valid_data.tail(5)
+    bottom = sorted_data.tail(5)
     sns.barplot(x=metric, y='Author', data=bottom, ax=ax2, palette='rocket')
     ax2.set_title(f'Bottom 5 {title}')
     
@@ -82,25 +79,36 @@ if uploaded_file:
                 max_value=df['Date'].max()
             )
             
-            # Provider selection (exclude shift=0 for selected date)
+            # Get valid providers (shift > 0 for selected date)
             valid_providers = df[
                 (df['Date'] == selected_date) &
                 (df['shift'] > 0)
             ]['Author'].unique()
             
-            selected_providers = st.multiselect(
-                "Select Providers",
-                options=valid_providers,
-                default=valid_providers
-            )
+            # Provider selection with "All" default
+            all_selected = st.checkbox("Select All Providers", value=True)
+            
+            if all_selected:
+                selected_providers = valid_providers
+            else:
+                selected_providers = st.multiselect(
+                    "Select Individual Providers:",
+                    options=valid_providers,
+                    default=[],
+                    placeholder="Start typing to search..."
+                )
 
         # Apply filters
         filtered = df[
             (df['Date'] == selected_date) &
-            (df['Author'].isin(selected_providers)) &
-            (df['shift'] > 0)
+            (df['Author'].isin(valid_providers))  # Always filter by shift > 0
         ]
         
+        if all_selected:
+            filtered = filtered[filtered['Author'].isin(valid_providers)]
+        else:
+            filtered = filtered[filtered['Author'].isin(selected_providers)]
+
         if not filtered.empty:
             # Calculate daily metrics
             daily_stats = filtered.groupby('Author').agg({
