@@ -104,14 +104,14 @@ if uploaded_file:
                                                default=df['Day of Week'].unique())
                 df_filtered = df[df['Day of Week'].isin(selected_days)]
 
-            # Provider Dropdown with Collapse Feature
+            # Provider Dropdown with Select All Functionality
             provider_list = sorted(df_filtered['Author'].unique())
-            default_provider = provider_list if len(provider_list) <= 5 else []
 
-            selected_providers = st.multiselect(
+            select_all = st.checkbox("Select All Providers", value=True)
+            selected_providers = provider_list if select_all else st.multiselect(
                 "Select Providers",
                 options=provider_list,
-                default=default_provider,
+                default=[],
                 placeholder="Start typing to search..."
             )
 
@@ -123,7 +123,7 @@ if uploaded_file:
             daily_stats = df_filtered.groupby('Author').agg({
                 'Points': 'sum',
                 'Procedure/half': 'sum',
-                'Turnaround': 'mean'
+                'Turnaround': 'mean'  # Ensuring TAT is pulled from the correct column
             }).reset_index()
             
             daily_stats['Procedures/day'] = daily_stats['Procedure/half'] * 2
@@ -165,6 +165,7 @@ if uploaded_file:
                 column_config={
                     "Date": "Date",
                     "Author": "Provider",
+                    "Turnaround": st.column_config.NumberColumn("Turnaround Time (hrs)", help="Avg TAT in hours", format="%.1f"),
                     "shift": st.column_config.NumberColumn("Shift Value", help="0-2 scale based on shift length", format="%d ⏳"),
                     "Shift Status": "Shift Status"
                 },
