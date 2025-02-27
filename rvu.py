@@ -47,4 +47,110 @@ def plot_rankings(data, metric, title, ascending=False):
     if metric == 'Turnaround':
         ascending = True  # Force ascending for TAT
         
-    sorted_data = data.sort_values(metric, ascending=ascending).dropna(sub
+    sorted_data = data.sort_values(metric, ascending=ascending).dropna(subset=[metric])
+
+    if sorted_data.empty:
+        st.warning(f"No data available for {title}")
+        return
+    
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # Top performers
+    top = sorted_data.head(5)
+    sns.barplot(x=metric, y='Author', data=top, ax=axes[0], palette='viridis')
+    axes[0].set_title(f'Top 5 {title}')
+    axes[0].set_xlabel("")
+
+    # Bottom performers
+    bottom = sorted_data.tail(5)
+    sns.barplot(x=metric, y='Author', data=bottom, ax=axes[1], palette='rocket')
+    axes[1].set_title(f'Bottom 5 {title}')
+    axes[1].set_xlabel("")
+
+    plt.tight_layout()
+    st.pyplot(fig)
+
+if uploaded_file:
+    df = load_data(uploaded_file)
+    
+    if df is not None:
+        with st.sidebar:
+            # Date selection (default to latest date)
+            latest_date = df['Date'].max()
+            selected_date = st.date_input(
+                "Select Date",
+                value=latest_date,
+                min_value=df['Date'].min(),
+                max_value=df['Date'].max()
+            )
+            
+            # Get valid providers (including those flagged as "No Shift in Qgenda")
+            available_providers = df[df['Date'] == selected_date]['Author'].unique()
+            provider_options = ["ALL"] + sorted(available_providers.tolist())
+
+            # True dropdown for provider selection
+            selected_provider = st.selectbox("Select Provider", options=provider_options, index=0)
+
+        # Apply filters
+        if selected_provider == "ALL":
+            filtered = df[df['Date'] == selected_date]
+        else:
+            filtered = df[(df['Date'] == selected_date) & (df['Author'] == selected_provider)]
+
+        if not filtered.empty:
+            # Calculate daily metrics
+            daily_stats = filtered.groupby('Author').agg({
+                'Points': 'sum',
+                'Procedure/half': 'sum',
+                'Turnaround': 'mean'
+            }).reset_index()
+            
+            daily_stats['Procedures/day'] = daily_stats['Procedure/half'] * 2
+            
+            # Display metrics with improved spacing
+            st.markdown("---")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Points", daily_stats['Points'].sum())
+            with col2:
+                st.metric("Total Procedures", daily_stats['Procedures/day'].sum())
+            with col3:
+                st.metric("Avg Turnaround", f"{daily_stats['Turnaround'].mean():.1f} hrs")
+
+            st.markdown("---")
+
+            # Performance rankings
+            st.subheader(f"Performance Rankings for {selected_date}")
+            
+            # Points per Day
+            plot_rankings(daily_stats, 'Points', 'Points per Day', ascending=False)
+            
+            # Procedures per Day
+            plot_rankings(daily_stats, 'Procedures/day', 'Procedures per Day', ascending=False)
+            
+            # Turnaround Time
+            plot_rankings(daily_stats, 'Turnaround', 'Average Turnaround Time', ascending=True)
+
+            # Raw data
+            st.subheader("Detailed Daily Performance")
+            st.dataframe(
+                filtered,
+                column_config={
+                    "Date": "Date",
+                    "Author": "Provider",
+                    "shift": st.column_config.NumberColumn("Shift Value", help="0-2 scale based on shift length", format="%d ⏳"),
+                    "Shift Status": "Shift Status"
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+            
+        else:
+            st.warning("No data found for selected filters")
+            
+else:
+    st.info("👆 Upload RVU Daily Master Excel file to begin")
+
+# Footer
+st.divider()
+st.caption("MILV Radiology Analytics | Data refreshed daily at 8 AM EST")
