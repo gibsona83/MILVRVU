@@ -35,8 +35,14 @@ def load_data(uploaded_file):
         numeric_cols = ['Points', 'Procedure/half', 'shift']
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
 
-        # Convert Turnaround Time (HH:MM:SS) to hours
-        df['Turnaround'] = pd.to_timedelta(df['Turnaround']).dt.total_seconds() / 3600
+        # Convert Turnaround Time (handles both D.hh:mm:ss and hh:mm:ss formats)
+        def parse_turnaround(value):
+            try:
+                return pd.Timedelta(value).total_seconds() / 3600  # Convert to hours
+            except:
+                return None  # Handle errors gracefully
+
+        df['Turnaround'] = df['Turnaround'].astype(str).apply(parse_turnaround)
 
         # Assign "No Shift in Qgenda" to blank shifts
         df['Shift Status'] = df['shift'].apply(lambda x: "No Shift in Qgenda" if pd.isna(x) or x == 0 else "Scheduled Shift")
