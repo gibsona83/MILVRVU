@@ -27,9 +27,8 @@ def load_data(uploaded_file):
             st.error(f"Missing columns: {', '.join(missing)}")
             return None
             
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df = df.dropna(subset=['Date'])
-        df['Day_of_Week'] = df['Date'].dt.day_name()
         
         numeric_cols = ['Points', 'Turnaround', 'Procedure/half', 'shift']
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
@@ -43,19 +42,26 @@ def load_data(uploaded_file):
 def plot_rankings(data, metric, title, ascending=False):
     """Plot top and bottom performers with dynamic sorting"""
     if metric == 'Turnaround':
-        ascending = True  # Override for TAT
+        ascending = True  # Force ascending for TAT
         
     sorted_data = data.sort_values(metric, ascending=ascending).dropna(subset=[metric])
+    
+    # Exclude providers with shift=0 or missing data
+    valid_data = sorted_data[sorted_data['shift'] > 0]
+    
+    if valid_data.empty:
+        st.warning(f"No data available for {title}")
+        return
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
     
     # Top performers
-    top = sorted_data.head(5)
+    top = valid_data.head(5)
     sns.barplot(x=metric, y='Author', data=top, ax=ax1, palette='viridis')
     ax1.set_title(f'Top 5 {title}')
     
     # Bottom performers
-    bottom = sorted_data.tail(5)
+    bottom = valid_data.tail(5)
     sns.barplot(x=metric, y='Author', data=bottom, ax=ax2, palette='rocket')
     ax2.set_title(f'Bottom 5 {title}')
     
@@ -67,19 +73,18 @@ if uploaded_file:
     
     if df is not None:
         with st.sidebar:
-            # Date range with default to latest date
-            min_date = df['Date'].min().date()
-            max_date = df['Date'].max().date()
-            date_range = st.date_input(
-                "Select Date Range",
-                value=[max_date, max_date],
-                min_value=min_date,
-                max_value=max_date
+            # Date selection (default to latest date)
+            latest_date = df['Date'].max()
+            selected_date = st.date_input(
+                "Select Date",
+                value=latest_date,
+                min_value=df['Date'].min(),
+                max_value=df['Date'].max()
             )
             
-            # Provider dropdown (exclude those with shift=0 in selected dates)
+            # Provider selection (exclude shift=0 for selected date)
             valid_providers = df[
-                (df['Date'].between(*date_range)) &
+                (df['Date'] == selected_date) &
                 (df['shift'] > 0)
             ]['Author'].unique()
             
@@ -91,14 +96,14 @@ if uploaded_file:
 
         # Apply filters
         filtered = df[
-            (df['Date'].between(pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1]))) &
+            (df['Date'] == selected_date) &
             (df['Author'].isin(selected_providers)) &
             (df['shift'] > 0)
         ]
         
         if not filtered.empty:
-            # Daily metrics
-            daily_stats = filtered.groupby(['Date', 'Author']).agg({
+            # Calculate daily metrics
+            daily_stats = filtered.groupby('Author').agg({
                 'Points': 'sum',
                 'Procedure/half': 'sum',
                 'Turnaround': 'mean'
@@ -109,45 +114,51 @@ if uploaded_file:
             # Display metrics
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Total Providers", daily_stats['Author'].nunique())
+                st.metric("Total Points", daily_stats['Points'].sum())
             with col2:
-                st.metric("Average Points/Day", f"{daily_stats['Points'].mean():.1f}")
+                st.metric("Total Procedures", daily_stats['Procedures/day'].sum())
             with col3:
-                st.metric("Avg Daily Procedures", f"{daily_stats['Procedures/day'].mean():.1f}")
+                st.metric("Avg Turnaround", f"{daily_stats['Turnaround'].mean():.1f} hrs")
 
             # Performance rankings
-            st.subheader("Performance Rankings")
+            st.subheader(f"Performance Rankings for {selected_date}")
             
             # Points per Day
             plot_rankings(
-                daily_stats.groupby('Author')['Points'].mean().reset_index(),
+                daily_stats,
                 'Points',
-                'Points per Day'
+                'Points per Day',
+                ascending=False
             )
             
             # Procedures per Day
             plot_rankings(
-                daily_stats.groupby('Author')['Procedures/day'].mean().reset_index(),
+                daily_stats,
                 'Procedures/day',
-                'Procedures per Day'
+                'Procedures per Day',
+                ascending=False
             )
             
             # Turnaround Time
             plot_rankings(
-                daily_stats.groupby('Author')['Turnaround'].mean().reset_index(),
+                daily_stats,
                 'Turnaround',
-                'Average Turnaround Time'
+                'Average Turnaround Time',
+                ascending=True
             )
 
             # Raw data
             st.subheader("Detailed Daily Performance")
             st.dataframe(
-                daily_stats,
+                filtered,
                 column_config={
                     "Date": "Date",
                     "Author": "Provider",
-                    "Procedures/day": st.column_config.NumberColumn(format="%d 📋"),
-                    "Turnaround": st.column_config.NumberColumn(format="%.1f hrs ⏱️")
+                    "shift": st.column_config.NumberColumn(
+                        "Shift Value",
+                        help="0-2 scale based on shift length",
+                        format="%d ⏳"
+                    )
                 },
                 hide_index=True,
                 use_container_width=True
