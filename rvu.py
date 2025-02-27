@@ -51,13 +51,9 @@ else:
     st.error("The column 'Turnaround' is missing in the dataset.")
     st.stop()
 
-# Handle blank or zero shift values - assign them a half-day shift for comparison but flag them as 'No Shift in Qgenda'
-df["shift"] = df["shift"].fillna(1).replace(0, 1)  # Ensure no division by zero
-df["Shift Type"] = df["shift"].apply(lambda x: "No Shift in Qgenda" if x == 1 else "Scheduled Shift")
-
-# Compute per half-day metrics safely
-df["Points per Half-Day"] = df["Points"].div(df["shift"], fill_value=1)
-df["Procedures per Half-Day"] = df["Procedure"].div(df["shift"], fill_value=1)
+# Use existing fields for per half-day calculations
+df["Points per Half-Day"] = df["Points per Half-Day"].fillna(0)
+df["Procedures per Half-Day"] = df["Procedures per Half-Day"].fillna(0)
 
 # Sidebar filters
 st.sidebar.header("Filters")
