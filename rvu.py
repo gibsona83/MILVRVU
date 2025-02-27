@@ -36,6 +36,9 @@ def load_data(uploaded_file):
         df['Shift Status'] = df['shift'].apply(lambda x: "No Shift in Qgenda" if pd.isna(x) or x == 0 else "Scheduled Shift")
         df['shift'].fillna(0.5, inplace=True)  # Assign half-day for comparison
 
+        # Extract weekday for filtering
+        df['Day of Week'] = pd.to_datetime(df['Date']).dt.day_name()
+
         return df.sort_values('Date', ascending=False)
     
     except Exception as e:
@@ -75,31 +78,40 @@ if uploaded_file:
     
     if df is not None:
         with st.sidebar:
-            # Date selection (default to latest date)
-            latest_date = df['Date'].max()
-            selected_date = st.date_input(
-                "Select Date",
-                value=latest_date,
-                min_value=df['Date'].min(),
-                max_value=df['Date'].max()
-            )
+            # Date selection: Single date or range
+            date_filter_type = st.radio("Filter by:", ["Single Date", "Date Range", "Day of Week"])
             
-            # Get valid providers (including those flagged as "No Shift in Qgenda")
-            available_providers = df[df['Date'] == selected_date]['Author'].unique()
-            provider_options = ["ALL"] + sorted(available_providers.tolist())
+            if date_filter_type == "Single Date":
+                selected_date = st.date_input("Select Date", value=df['Date'].max(), 
+                                              min_value=df['Date'].min(), max_value=df['Date'].max())
+                df_filtered = df[df['Date'] == selected_date]
+            
+            elif date_filter_type == "Date Range":
+                start_date, end_date = st.date_input(
+                    "Select Date Range", 
+                    value=[df['Date'].min(), df['Date'].max()],
+                    min_value=df['Date'].min(),
+                    max_value=df['Date'].max()
+                )
+                df_filtered = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
+            
+            else:  # Filter by day of the week
+                selected_days = st.multiselect("Select Day(s) of the Week", 
+                                               options=df['Day of Week'].unique(), 
+                                               default=df['Day of Week'].unique())
+                df_filtered = df[df['Day of Week'].isin(selected_days)]
 
-            # True dropdown for provider selection
-            selected_provider = st.selectbox("Select Provider", options=provider_options, index=0)
+            # Multi-select provider filtering
+            available_providers = sorted(df_filtered['Author'].unique())
+            selected_providers = st.multiselect("Select Providers", 
+                                                options=available_providers, 
+                                                default=available_providers)
+            
+            df_filtered = df_filtered[df_filtered['Author'].isin(selected_providers)]
 
-        # Apply filters
-        if selected_provider == "ALL":
-            filtered = df[df['Date'] == selected_date]
-        else:
-            filtered = df[(df['Date'] == selected_date) & (df['Author'] == selected_provider)]
-
-        if not filtered.empty:
+        if not df_filtered.empty:
             # Calculate daily metrics
-            daily_stats = filtered.groupby('Author').agg({
+            daily_stats = df_filtered.groupby('Author').agg({
                 'Points': 'sum',
                 'Procedure/half': 'sum',
                 'Turnaround': 'mean'
@@ -115,12 +127,16 @@ if uploaded_file:
             with col2:
                 st.metric("Total Procedures", daily_stats['Procedures/day'].sum())
             with col3:
-                st.metric("Avg Turnaround", f"{daily_stats['Turnaround'].mean():.1f} hrs")
+                avg_tat = daily_stats['Turnaround'].mean()
+                if pd.notna(avg_tat):
+                    st.metric("Avg Turnaround", f"{avg_tat:.1f} hrs")
+                else:
+                    st.metric("Avg Turnaround", "N/A")
 
             st.markdown("---")
 
             # Performance rankings
-            st.subheader(f"Performance Rankings for {selected_date}")
+            st.subheader(f"Performance Rankings")
             
             # Points per Day
             plot_rankings(daily_stats, 'Points', 'Points per Day', ascending=False)
@@ -134,7 +150,7 @@ if uploaded_file:
             # Raw data
             st.subheader("Detailed Daily Performance")
             st.dataframe(
-                filtered,
+                df_filtered,
                 column_config={
                     "Date": "Date",
                     "Author": "Provider",
