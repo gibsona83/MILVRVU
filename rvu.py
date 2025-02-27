@@ -52,11 +52,12 @@ else:
     st.stop()
 
 # Handle blank shift values (NaN) - assign them a half-day shift for comparison but flag them as 'No Shift in Qgenda'
-df["shift"] = df["shift"].fillna(1)  # Assign a half-day shift for comparison purposes
+df["shift"] = df["shift"].fillna(1).replace(0, 1)  # Assign a half-day shift for comparison purposes
 df["Shift Type"] = df["shift"].apply(lambda x: "No Shift in Qgenda" if x == 1 else "Scheduled Shift")
 
-# Compute Points per Half-Day
+# Compute per half-day metrics
 df["Points per Half-Day"] = df["Points"] / df["shift"]
+df["Procedures per Half-Day"] = df["Procedure"] / df["shift"]
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -66,10 +67,6 @@ date_selection = st.sidebar.date_input("Select a date range", [df["Date"].min(),
 # Dropdown for provider selection
 providers = ["ALL"] + list(df["Author"].unique())
 selected_providers = st.sidebar.multiselect("Select Providers", providers, default=["ALL"])
-
-# Option to sort charts ascending or descending
-sort_order = st.sidebar.radio("Sort Order", options=["Descending", "Ascending"], index=0)
-ascending = True if sort_order == "Ascending" else False
 
 # Filter data based on selections
 if isinstance(date_selection, tuple) or isinstance(date_selection, list):
@@ -101,34 +98,28 @@ col1.metric("Total Procedures", latest_data["Procedure"].sum(), help="Total numb
 col2.metric("Total Points", latest_data["Points"].sum(), help="Custom productivity metric based on workload weighting in the selected range.")
 col3.metric("Avg Turnaround Time", avg_turnaround_hms, help="Average time taken to complete a report, calculated from submission to finalization.")
 
-# Visualization: Productivity per Half-Day
-chart_title = "Provider Productivity per Half-Day"
-st.subheader(f"📈 {chart_title}")
-st.caption("This chart updates dynamically based on your selected filters.")
-
-# Sort data and select relevant providers
-top_providers = filtered_data.groupby("Author")["Points per Half-Day"].sum().sort_values(ascending=ascending)
-
-fig, ax = plt.subplots(figsize=(10, 6))  # Adjusted figure size for readability
-top_providers.plot(kind="barh", ax=ax, color="steelblue", fontsize=10)
-
+# Visualization: Points per Half-Day
+st.subheader("📈 Points per Half-Day (Descending)")
+fig, ax = plt.subplots(figsize=(10, 6))
+filtered_data.groupby("Author")["Points per Half-Day"].sum().sort_values(ascending=False).plot(kind="barh", ax=ax, color="steelblue", fontsize=10)
 ax.set_xlabel("Total Points per Half-Day", fontsize=12)
 ax.set_ylabel("Provider", fontsize=12)
-ax.set_title(chart_title, fontsize=14)
+st.pyplot(fig)
 
-# Improve readability by setting proper spacing
-plt.xticks(fontsize=10)
-plt.yticks(fontsize=10)
-plt.grid(axis='x', linestyle='--', alpha=0.7)
+# Visualization: Procedures per Half-Day
+st.subheader("📈 Procedures per Half-Day (Descending)")
+fig, ax = plt.subplots(figsize=(10, 6))
+filtered_data.groupby("Author")["Procedures per Half-Day"].sum().sort_values(ascending=False).plot(kind="barh", ax=ax, color="darkorange", fontsize=10)
+ax.set_xlabel("Total Procedures per Half-Day", fontsize=12)
+ax.set_ylabel("Provider", fontsize=12)
 st.pyplot(fig)
 
 # Turnaround Time (TAT) View
-st.subheader("⏳ Turnaround Time (TAT) View")
+st.subheader("⏳ Turnaround Time (Ascending)")
 fig, ax = plt.subplots(figsize=(10, 6))
-filtered_data.groupby("Author")["Turnaround_Seconds"].mean().sort_values().plot(kind="barh", ax=ax, color="orangered", fontsize=10)
+filtered_data.groupby("Author")["Turnaround_Seconds"].mean().sort_values(ascending=True).plot(kind="barh", ax=ax, color="orangered", fontsize=10)
 ax.set_xlabel("Average Turnaround Time (seconds)", fontsize=12)
 ax.set_ylabel("Provider", fontsize=12)
-ax.set_title("Average Turnaround Time per Provider", fontsize=14)
 st.pyplot(fig)
 
 # Downloadable filtered data
