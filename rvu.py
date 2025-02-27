@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import datetime as dt
 import numpy as np
+import re
 
 # Streamlit page configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -51,13 +52,26 @@ else:
 # Convert date column to datetime
 df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
 
-# Fix Turnaround Time conversion
-if "Turnaround" in df.columns:
-    df["Turnaround"] = pd.to_timedelta(df["Turnaround"], errors='coerce')
-    df["Turnaround"] = df["Turnaround"].dt.total_seconds().fillna(0)
-else:
-    st.error("Missing 'Turnaround' column in data. Please check file format.")
-    st.stop()
+# Handle Turnaround Time Conversion
+def convert_turnaround(value):
+    if pd.isna(value) or value == "":
+        return np.nan
+    try:
+        if isinstance(value, str):
+            match = re.match(r"(\d+)\.(\d+):(\d+):(\d+)", value)
+            if match:
+                days, hours, minutes, seconds = map(int, match.groups())
+                return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds
+            return pd.to_timedelta(value).total_seconds()
+        elif isinstance(value, dt.time):
+            return value.hour * 3600 + value.minute * 60 + value.second
+        elif isinstance(value, (dt.timedelta, pd.Timedelta)):
+            return value.total_seconds()
+        return float(value)  # Handle numeric values directly
+    except Exception:
+        return np.nan
+
+df["Turnaround"] = df["Turnaround"].apply(convert_turnaround)
 
 # Sidebar filtering options
 st.sidebar.header("Filters")
