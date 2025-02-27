@@ -101,13 +101,19 @@ if uploaded_file:
                                                default=df['Day of Week'].unique())
                 df_filtered = df[df['Day of Week'].isin(selected_days)]
 
-            # Multi-select provider filtering
-            available_providers = sorted(df_filtered['Author'].unique())
-            selected_providers = st.multiselect("Select Providers", 
-                                                options=available_providers, 
-                                                default=available_providers)
-            
-            df_filtered = df_filtered[df_filtered['Author'].isin(selected_providers)]
+            # Provider Dropdown with Collapse Feature
+            provider_list = sorted(df_filtered['Author'].unique())
+            default_provider = provider_list if len(provider_list) <= 5 else []
+
+            selected_providers = st.multiselect(
+                "Select Providers",
+                options=provider_list,
+                default=default_provider,
+                placeholder="Start typing to search..."
+            )
+
+            if selected_providers:
+                df_filtered = df_filtered[df_filtered['Author'].isin(selected_providers)]
 
         if not df_filtered.empty:
             # Calculate daily metrics
