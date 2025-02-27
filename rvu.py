@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import seaborn as sns
 import datetime as dt
+import numpy as np
 
 # Streamlit page configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -26,7 +28,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 # Upload new file
-st.sidebar.header("Upload New Excel File")
+st.sidebar.header("Upload Daily RVU File")
 uploaded_file = st.sidebar.file_uploader("Upload Excel file", type=["xlsx"])
 
 if uploaded_file is not None:
@@ -48,6 +50,9 @@ else:
 
 # Convert date column to datetime
 df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
+
+# Convert 'Turnaround' to numeric (seconds)
+df["Turnaround"] = pd.to_timedelta(df["Turnaround"], errors='coerce').dt.total_seconds()
 
 # Sidebar filtering options
 st.sidebar.header("Filters")
@@ -77,55 +82,45 @@ filtered_data["Procedures per Day"] = filtered_data["Procedure/half"] * 2
 # Default number of providers for visualization clarity
 default_top_n = 10
 
+# Display selected filters
+st.markdown(f"<h3 style='color: {PRIMARY_COLOR};'>Showing data for:</h3>", unsafe_allow_html=True)
+st.write(f"Date: {selected_date}")
+st.write(f"Date Range: {date_range}")
+st.write(f"Day of Week: {', '.join(selected_day_of_week) if selected_day_of_week else 'All'}")
+st.write(f"Month: {', '.join(selected_month) if selected_month else 'All'}")
+
 # Create side-by-side visualizations for top and bottom performers
-st.markdown(f"<h2 style='color: {ACCENT_COLOR};'>Top & Bottom Performers by Points per Day</h2>", unsafe_allow_html=True)
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+st.markdown(f"<h2 style='color: {ACCENT_COLOR}; text-align:center;'>Top & Bottom Performers by Points per Day</h2>", unsafe_allow_html=True)
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
 top_points = filtered_data.nlargest(default_top_n, "Points per Day")
 bottom_points = filtered_data.nsmallest(default_top_n, "Points per Day")
 
-ax[0].barh(top_points["Author"], top_points["Points per Day"], color=ACCENT_COLOR)
-ax[0].set_xlabel("Points per Day")
-ax[0].set_title("Top Performers")
+sns.barplot(y=top_points["Author"], x=top_points["Points per Day"], ax=axes[0], color=ACCENT_COLOR)
+axes[0].set_title("Top Performers")
+axes[0].set_xlabel("Points per Day")
 
-ax[1].barh(bottom_points["Author"], bottom_points["Points per Day"], color=PRIMARY_COLOR)
-ax[1].set_xlabel("Points per Day")
-ax[1].set_title("Bottom Performers")
+sns.barplot(y=bottom_points["Author"], x=bottom_points["Points per Day"], ax=axes[1], color=PRIMARY_COLOR)
+axes[1].set_title("Bottom Performers")
+axes[1].set_xlabel("Points per Day")
 
+plt.tight_layout()
 st.pyplot(fig)
 
-st.markdown(f"<h2 style='color: {ACCENT_COLOR};'>Top & Bottom Performers by Procedures per Day</h2>", unsafe_allow_html=True)
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-top_procedures = filtered_data.nlargest(default_top_n, "Procedures per Day")
-bottom_procedures = filtered_data.nsmallest(default_top_n, "Procedures per Day")
-
-ax[0].barh(top_procedures["Author"], top_procedures["Procedures per Day"], color=ACCENT_COLOR)
-ax[0].set_xlabel("Procedures per Day")
-ax[0].set_title("Top Performers")
-
-ax[1].barh(bottom_procedures["Author"], bottom_procedures["Procedures per Day"], color=PRIMARY_COLOR)
-ax[1].set_xlabel("Procedures per Day")
-ax[1].set_title("Bottom Performers")
-
-st.pyplot(fig)
-
-st.markdown(f"<h2 style='color: {PRIMARY_COLOR};'>Top & Bottom Performers by Turnaround Time</h2>", unsafe_allow_html=True)
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+# Repeat for Procedures per Day and Turnaround Time
+st.markdown(f"<h2 style='color: {ACCENT_COLOR}; text-align:center;'>Top & Bottom Performers by Turnaround Time</h2>", unsafe_allow_html=True)
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
 top_tat = filtered_data.nsmallest(default_top_n, "Turnaround")
 bottom_tat = filtered_data.nlargest(default_top_n, "Turnaround")
 
-ax[0].barh(top_tat["Author"], top_tat["Turnaround"], color=ACCENT_COLOR)
-ax[0].set_xlabel("Turnaround Time (TAT)")
-ax[0].set_title("Fastest Turnaround")
+sns.barplot(y=top_tat["Author"], x=top_tat["Turnaround"], ax=axes[0], color=ACCENT_COLOR)
+axes[0].set_title("Fastest Turnaround (Lower is Better)")
+axes[0].set_xlabel("Turnaround Time (seconds)")
 
-ax[1].barh(bottom_tat["Author"], bottom_tat["Turnaround"], color=PRIMARY_COLOR)
-ax[1].set_xlabel("Turnaround Time (TAT)")
-ax[1].set_title("Slowest Turnaround")
+sns.barplot(y=bottom_tat["Author"], x=bottom_tat["Turnaround"], ax=axes[1], color=PRIMARY_COLOR)
+axes[1].set_title("Slowest Turnaround")
+axes[1].set_xlabel("Turnaround Time (seconds)")
 
+plt.tight_layout()
 st.pyplot(fig)
-
-# Summary statistics
-st.markdown(f"<h2 style='color: {PRIMARY_COLOR};'>📈 Summary Statistics</h2>", unsafe_allow_html=True)
-st.write(filtered_data[["Points per Day", "Procedures per Day", "Turnaround"]].describe())
