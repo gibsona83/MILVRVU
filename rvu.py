@@ -51,14 +51,12 @@ else:
     st.error("The column 'Turnaround' is missing in the dataset.")
     st.stop()
 
-# Calculate mean turnaround time in seconds
-avg_turnaround = df["Turnaround_Seconds"].mean()
+# Handle blank shift values (NaN) - assign them a half-day shift for comparison but flag them as 'No Shift in Qgenda'
+df["shift"] = df["shift"].fillna(1)  # Assign a half-day shift for comparison purposes
+df["Shift Type"] = df["shift"].apply(lambda x: "No Shift in Qgenda" if x == 1 else "Scheduled Shift")
 
-# Convert back to H:M:S for display
-if not np.isnan(avg_turnaround):
-    avg_turnaround_hms = f"{int(avg_turnaround // 3600)}:{int((avg_turnaround % 3600) // 60)}:{int(avg_turnaround % 60)}"
-else:
-    avg_turnaround_hms = "N/A"
+# Compute Points per Half-Day
+df["Points per Half-Day"] = df["Points"] / df["shift"]
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -83,35 +81,54 @@ else:
 if "ALL" not in selected_providers:
     filtered_data = filtered_data[filtered_data["Author"].isin(selected_providers)]
 
-# Get latest day for KPIs
-latest_day = df["Date"].max()
-latest_data = df[df["Date"] == latest_day]
+# Update overview dynamically based on filtered data
+latest_data = filtered_data.copy()
 
-st.subheader(f"📊 Latest Day Overview: {latest_day.strftime('%Y-%m-%d')}")
+# Calculate mean turnaround time in seconds
+avg_turnaround = latest_data["Turnaround_Seconds"].mean()
+
+# Convert back to H:M:S for display
+if not np.isnan(avg_turnaround):
+    avg_turnaround_hms = f"{int(avg_turnaround // 3600)}:{int((avg_turnaround % 3600) // 60)}:{int(avg_turnaround % 60)}"
+else:
+    avg_turnaround_hms = "N/A"
+
+st.subheader("📊 Overview Based on Selection")
 
 # Display KPI metrics with tooltips
 col1, col2, col3 = st.columns([1, 1, 1])
-col1.metric("Total Procedures", latest_data["Procedure"].sum(), help="Total number of procedures completed on this date.")
-col2.metric("Total Points", latest_data["Points"].sum(), help="Custom productivity metric based on workload weighting.")
+col1.metric("Total Procedures", latest_data["Procedure"].sum(), help="Total number of procedures completed in the selected range.")
+col2.metric("Total Points", latest_data["Points"].sum(), help="Custom productivity metric based on workload weighting in the selected range.")
 col3.metric("Avg Turnaround Time", avg_turnaround_hms, help="Average time taken to complete a report, calculated from submission to finalization.")
 
-# Visualization: Top 20 productivity per half-day
-st.subheader("📈 Top 20 Providers - Productivity per Half-Day")
+# Visualization: Productivity per Half-Day
+chart_title = "Provider Productivity per Half-Day"
+st.subheader(f"📈 {chart_title}")
+st.caption("This chart updates dynamically based on your selected filters.")
 
-# Sort data and select top providers
-top_providers = filtered_data.groupby("Author")["Points/half day"].sum().sort_values(ascending=ascending).head(20)
+# Sort data and select relevant providers
+top_providers = filtered_data.groupby("Author")["Points per Half-Day"].sum().sort_values(ascending=ascending)
 
 fig, ax = plt.subplots(figsize=(10, 6))  # Adjusted figure size for readability
 top_providers.plot(kind="barh", ax=ax, color="steelblue", fontsize=10)
 
 ax.set_xlabel("Total Points per Half-Day", fontsize=12)
 ax.set_ylabel("Provider", fontsize=12)
-ax.set_title("Top 20 Provider Productivity per Half-Day", fontsize=14)
+ax.set_title(chart_title, fontsize=14)
 
 # Improve readability by setting proper spacing
 plt.xticks(fontsize=10)
 plt.yticks(fontsize=10)
 plt.grid(axis='x', linestyle='--', alpha=0.7)
+st.pyplot(fig)
+
+# Turnaround Time (TAT) View
+st.subheader("⏳ Turnaround Time (TAT) View")
+fig, ax = plt.subplots(figsize=(10, 6))
+filtered_data.groupby("Author")["Turnaround_Seconds"].mean().sort_values().plot(kind="barh", ax=ax, color="orangered", fontsize=10)
+ax.set_xlabel("Average Turnaround Time (seconds)", fontsize=12)
+ax.set_ylabel("Provider", fontsize=12)
+ax.set_title("Average Turnaround Time per Provider", fontsize=14)
 st.pyplot(fig)
 
 # Downloadable filtered data
