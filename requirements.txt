@@ -1,6 +1,5 @@
-streamlit
-openpyxl
-matplotlib
-seaborn
-plotly
-numpy
+streamlit>=1.42.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+matplotlib>=3.7.0
+seaborn>=0.13.0
