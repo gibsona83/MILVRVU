@@ -96,20 +96,20 @@ if not np.isnan(avg_turnaround):
 else:
     avg_turnaround_hms = "N/A"
 
-# Display KPI metrics with better spacing
+# Display KPI metrics with tooltips
 col1, col2, col3 = st.columns([1, 1, 1])
-col1.metric("Total Procedures", latest_data['Procedure'].sum())
-col2.metric("Total Points", latest_data['Points'].sum())
-col3.metric("Avg Turnaround Time", avg_turnaround_hms)
+col1.metric("Total Procedures", latest_data['Procedure'].sum(), help="Total number of procedures completed on this date.")
+col2.metric("Total Points", latest_data['Points'].sum(), help="Custom productivity metric based on workload weighting.")
+col3.metric("Avg Turnaround Time", avg_turnaround_hms, help="Average time taken to complete a report, calculated from submission to finalization.")
 
-# Visualization: Bar chart for productivity with improved spacing and readability
-st.subheader("📈 Productivity by Provider")
+# Visualization: Bar chart for productivity per half day, with improved readability
+st.subheader("📈 Productivity per Half-Day")
 fig, ax = plt.subplots(figsize=(12, 6))
-filtered_plot_data = filtered_data.groupby('Author')['Points'].sum().sort_values()
+filtered_plot_data = filtered_data.groupby('Author')['Points/half'].sum().sort_values()
 filtered_plot_data.plot(kind='barh', ax=ax, color='skyblue', fontsize=10)
-ax.set_xlabel("Total Points", fontsize=12)
+ax.set_xlabel("Total Points per Half-Day", fontsize=12)
 ax.set_ylabel("Provider", fontsize=12)
-ax.set_title("Provider Productivity", fontsize=14)
+ax.set_title("Provider Productivity per Half-Day", fontsize=14)
 plt.xticks(fontsize=10)
 plt.yticks(fontsize=8)
 st.pyplot(fig)
