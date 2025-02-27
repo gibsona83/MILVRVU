@@ -113,9 +113,9 @@ if uploaded_file:
                                                default=df['Day of Week'].unique())
                 df_filtered = df[df['Day of Week'].isin(selected_days)]
 
-            # Provider Dropdown with "ALL" Option
-            provider_list = sorted(df_filtered['Author'].unique())
-            provider_options = ["ALL"] + provider_list
+            # Only show providers with data for the selected date(s)
+            valid_providers = sorted(df_filtered['Author'].unique())
+            provider_options = ["ALL"] + valid_providers if valid_providers else ["ALL"]
 
             selected_providers = st.multiselect(
                 "Select Providers",
@@ -124,9 +124,9 @@ if uploaded_file:
                 placeholder="Start typing to search..."
             )
 
-            # If "ALL" is selected, use all providers
-            if "ALL" in selected_providers or not selected_providers:
-                df_filtered = df_filtered[df_filtered['Author'].isin(provider_list)]
+            # If "ALL" is selected, use all providers with data
+            if "ALL" in selected_providers:
+                df_filtered = df_filtered[df_filtered['Author'].isin(valid_providers)]
             else:
                 df_filtered = df_filtered[df_filtered['Author'].isin(selected_providers)]
 
