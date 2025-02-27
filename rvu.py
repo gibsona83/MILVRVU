@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 import io
 
 # Define storage file for persistence
@@ -60,11 +61,28 @@ latest_data = df[df['Date'] == latest_day]
 
 st.subheader(f"📊 Latest Day Overview: {latest_day.strftime('%Y-%m-%d')}")
 
+# Convert Turnaround Time from string to seconds
+def convert_time_to_seconds(time_str):
+    try:
+        h, m, s = map(int, time_str.split(":"))
+        return h * 3600 + m * 60 + s
+    except:
+        return np.nan  # Return NaN if conversion fails
+
+latest_data['Turnaround_Seconds'] = latest_data['Turnaround'].astype(str).apply(convert_time_to_seconds)
+avg_turnaround = latest_data['Turnaround_Seconds'].mean()
+
+# Convert back to H:M:S for display
+if not np.isnan(avg_turnaround):
+    avg_turnaround_hms = f"{int(avg_turnaround // 3600)}:{int((avg_turnaround % 3600) // 60)}:{int(avg_turnaround % 60)}"
+else:
+    avg_turnaround_hms = "N/A"
+
 # Display KPI metrics
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Procedures", latest_data['Procedure'].sum())
 col2.metric("Total Points", latest_data['Points'].sum())
-col3.metric("Avg Turnaround Time", latest_data['Turnaround'].mean())
+col3.metric("Avg Turnaround Time", avg_turnaround_hms)
 
 # Sidebar filters
 st.sidebar.header("Filters")
