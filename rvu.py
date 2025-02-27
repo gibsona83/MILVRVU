@@ -51,8 +51,13 @@ else:
 # Convert date column to datetime
 df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
 
-# Convert 'Turnaround' to numeric (seconds)
-df["Turnaround"] = pd.to_timedelta(df["Turnaround"], errors='coerce').dt.total_seconds()
+# Fix Turnaround Time conversion
+if "Turnaround" in df.columns:
+    df["Turnaround"] = pd.to_timedelta(df["Turnaround"], errors='coerce')
+    df["Turnaround"] = df["Turnaround"].dt.total_seconds().fillna(0)
+else:
+    st.error("Missing 'Turnaround' column in data. Please check file format.")
+    st.stop()
 
 # Sidebar filtering options
 st.sidebar.header("Filters")
@@ -90,24 +95,6 @@ st.write(f"Day of Week: {', '.join(selected_day_of_week) if selected_day_of_week
 st.write(f"Month: {', '.join(selected_month) if selected_month else 'All'}")
 
 # Create side-by-side visualizations for top and bottom performers
-st.markdown(f"<h2 style='color: {ACCENT_COLOR}; text-align:center;'>Top & Bottom Performers by Points per Day</h2>", unsafe_allow_html=True)
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-top_points = filtered_data.nlargest(default_top_n, "Points per Day")
-bottom_points = filtered_data.nsmallest(default_top_n, "Points per Day")
-
-sns.barplot(y=top_points["Author"], x=top_points["Points per Day"], ax=axes[0], color=ACCENT_COLOR)
-axes[0].set_title("Top Performers")
-axes[0].set_xlabel("Points per Day")
-
-sns.barplot(y=bottom_points["Author"], x=bottom_points["Points per Day"], ax=axes[1], color=PRIMARY_COLOR)
-axes[1].set_title("Bottom Performers")
-axes[1].set_xlabel("Points per Day")
-
-plt.tight_layout()
-st.pyplot(fig)
-
-# Repeat for Procedures per Day and Turnaround Time
 st.markdown(f"<h2 style='color: {ACCENT_COLOR}; text-align:center;'>Top & Bottom Performers by Turnaround Time</h2>", unsafe_allow_html=True)
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
