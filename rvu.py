@@ -69,6 +69,10 @@ date_selection = st.sidebar.date_input("Select a date range", [df["Date"].min(),
 providers = ["ALL"] + list(df["Author"].unique())
 selected_providers = st.sidebar.multiselect("Select Providers", providers, default=["ALL"])
 
+# Option to sort charts ascending or descending
+sort_order = st.sidebar.radio("Sort Order", options=["Descending", "Ascending"], index=0)
+ascending = True if sort_order == "Ascending" else False
+
 # Filter data based on selections
 if isinstance(date_selection, tuple) or isinstance(date_selection, list):
     start_date, end_date = date_selection
@@ -85,7 +89,7 @@ latest_data = df[df["Date"] == latest_day]
 
 st.subheader(f"📊 Latest Day Overview: {latest_day.strftime('%Y-%m-%d')}")
 
-# Display KPI metrics with the corrected turnaround time
+# Display KPI metrics with tooltips
 col1, col2, col3 = st.columns([1, 1, 1])
 col1.metric("Total Procedures", latest_data["Procedure"].sum(), help="Total number of procedures completed on this date.")
 col2.metric("Total Points", latest_data["Points"].sum(), help="Custom productivity metric based on workload weighting.")
@@ -95,7 +99,7 @@ col3.metric("Avg Turnaround Time", avg_turnaround_hms, help="Average time taken 
 st.subheader("📈 Top 20 Providers - Productivity per Half-Day")
 
 # Sort data and select top providers
-top_providers = filtered_data.groupby("Author")["Points/half day"].sum().sort_values(ascending=False).head(20)
+top_providers = filtered_data.groupby("Author")["Points/half day"].sum().sort_values(ascending=ascending).head(20)
 
 fig, ax = plt.subplots(figsize=(10, 6))  # Adjusted figure size for readability
 top_providers.plot(kind="barh", ax=ax, color="steelblue", fontsize=10)
