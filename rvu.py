@@ -76,8 +76,8 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
     try:
         upload_to_github(uploaded_file.getvalue(), str(FILE_PATH))
-        st.session_state.last_upload = uploaded_file.getvalue()
-        st.rerun()  # Refresh data display
+        st.session_state.last_upload = uploaded_file.getvalue()  # Store uploaded file in session
+        st.rerun()  # Refresh UI to reflect the update
     except Exception as e:
         st.error(f"Upload failed: {e}")
 
