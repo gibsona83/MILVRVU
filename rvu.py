@@ -25,7 +25,7 @@ def upload_to_github(file_bytes: bytes, file_name: str) -> None:
     """Uploads or updates an Excel file in GitHub repository as binary."""
     try:
         commit_msg = f"Update {file_name} via MILV app - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        
+
         try:
             contents = repo.get_contents(str(file_name), ref="main")
             repo.update_file(
@@ -51,9 +51,10 @@ def fetch_latest_file() -> pd.DataFrame:
     """Fetches the latest file from GitHub and loads it into a DataFrame."""
     try:
         file_content = repo.get_contents(str(FILE_PATH), ref="main")
-        
+        decoded_content = file_content.decoded_content  # Ensure binary content
+
         with st.spinner("Loading data..."):
-            df = pd.read_excel(io.BytesIO(file_content.decoded_content), engine="openpyxl")
+            df = pd.read_excel(io.BytesIO(decoded_content), engine="openpyxl")
         return df
     except UnknownObjectException:
         st.warning("File not found in repository. Upload a new file to get started.")
