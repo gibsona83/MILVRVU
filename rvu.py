@@ -2,12 +2,10 @@ import streamlit as st
 import pandas as pd
 from github import Github, UnknownObjectException
 import io
-from pathlib import Path
 from datetime import datetime
 import base64
 
 # --- Configuration ---
-# Load GitHub credentials from Streamlit secrets
 GITHUB_TOKEN = st.secrets["github"]["token"]
 GITHUB_USERNAME = st.secrets["github"]["username"]
 GITHUB_REPO = st.secrets["github"]["repo"]
@@ -23,13 +21,13 @@ except Exception as e:
 
 # --- Core Functions ---
 def upload_to_github(file_bytes: bytes, file_name: str) -> None:
-    """Uploads or updates an Excel file in GitHub repository as Base64 encoded content."""
+    """Uploads or updates an Excel file in GitHub repository as Base64."""
     try:
         commit_msg = f"Update {file_name} via MILV app - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         
-        # Encode file to Base64 for proper storage in GitHub
+        # Encode file in Base64 to store it properly in GitHub
         encoded_content = base64.b64encode(file_bytes).decode("utf-8")
-        
+
         try:
             contents = repo.get_contents(file_name, ref="main")
             repo.update_file(
@@ -56,7 +54,7 @@ def fetch_latest_file() -> pd.DataFrame:
     try:
         file_content = repo.get_contents(FILE_PATH, ref="main")
         
-        # Decode Base64 content back to binary
+        # Decode Base64 back to binary content
         decoded_content = base64.b64decode(file_content.content)
 
         with st.spinner("Loading data..."):
