@@ -8,7 +8,7 @@ import io
 GITHUB_TOKEN = st.secrets["github"]["token"]
 GITHUB_USERNAME = st.secrets["github"]["username"]
 GITHUB_REPO = st.secrets["github"]["repo"]
-FILE_PATH = "RVU_Daily_Master.xlsx"  # File name in GitHub
+FILE_PATH = "RVU_Daily_Master.xlsx"  # Adjust path if needed
 
 # Authenticate with GitHub
 g = Github(GITHUB_TOKEN)
@@ -28,18 +28,21 @@ def upload_to_github(file_content, file_name):
 def fetch_latest_file():
     """Fetches the latest file from GitHub and loads it into a DataFrame."""
     try:
-        file_content = repo.get_contents(FILE_PATH)
+        file_content = repo.get_contents(FILE_PATH)  # Get file from GitHub
         decoded_content = base64.b64decode(file_content.content)
-        df = pd.read_excel(io.BytesIO(decoded_content))
+
+        # Read Excel file with explicit engine
+        df = pd.read_excel(io.BytesIO(decoded_content), engine="openpyxl")
         return df
     except Exception as e:
-        st.error(f"Could not fetch latest file: {e}")
+        st.warning(f"Could not fetch the latest file: {e}")
         return None
 
 # Streamlit UI
 st.title("MILV Daily Productivity File Upload")
 
 uploaded_file = st.file_uploader("Upload the latest RVU Daily Master", type=["xlsx"])
+
 if uploaded_file is not None:
     file_bytes = uploaded_file.getvalue()
     upload_to_github(file_bytes, FILE_PATH)
