@@ -3,37 +3,26 @@ import pandas as pd
 from github import Github, UnknownObjectException
 import io
 from pathlib import Path
-from typing import Optional
 from datetime import datetime
 
 # --- Configuration ---
 # Load GitHub credentials from Streamlit secrets
-GITHUB_TOKEN: str = st.secrets["github"]["token"]
-GITHUB_USERNAME: str = st.secrets["github"]["username"]
-GITHUB_REPO: str = st.secrets["github"]["repo"]
-FILE_PATH: Path = Path(st.secrets.get("file_path", "RVU_Daily_Master.xlsx"))
+GITHUB_TOKEN = st.secrets["github"]["token"]
+GITHUB_USERNAME = st.secrets["github"]["username"]
+GITHUB_REPO = st.secrets["github"]["repo"]
+FILE_PATH = Path("RVU_Daily_Master.xlsx")  # Adjust if stored inside a folder
 
 # --- GitHub Setup ---
 try:
     g = Github(GITHUB_TOKEN, timeout=15)
     repo = g.get_user().get_repo(GITHUB_REPO)
-    # Verify main branch exists
-    repo.get_branch("main")
 except Exception as e:
     st.error(f"GitHub connection failed: {e}")
     st.stop()
 
 # --- Core Functions ---
 def upload_to_github(file_bytes: bytes, file_name: str) -> None:
-    """Uploads or updates a file in GitHub repository.
-    
-    Args:
-        file_bytes: Binary content of the file
-        file_name: Target file path in repository
-        
-    Raises:
-        github.GithubException: For GitHub API errors
-    """
+    """Uploads or updates an Excel file in GitHub repository as binary."""
     try:
         commit_msg = f"Update {file_name} via MILV app - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         
@@ -47,7 +36,6 @@ def upload_to_github(file_bytes: bytes, file_name: str) -> None:
                 branch="main"
             )
             st.success("File updated successfully in GitHub!")
-            
         except UnknownObjectException:  # File doesn't exist
             repo.create_file(
                 path=str(file_name),
@@ -56,34 +44,19 @@ def upload_to_github(file_bytes: bytes, file_name: str) -> None:
                 branch="main"
             )
             st.success("New file uploaded successfully to GitHub!")
-            
     except Exception as e:
         st.error(f"GitHub operation failed: {e}")
-        raise
 
-def fetch_latest_file() -> Optional[pd.DataFrame]:
-    """Fetches the latest file from GitHub and loads it into a DataFrame.
-    
-    Returns:
-        pd.DataFrame or None: Loaded data or None if failed
-    """
+def fetch_latest_file() -> pd.DataFrame:
+    """Fetches the latest file from GitHub and loads it into a DataFrame."""
     try:
         file_content = repo.get_contents(str(FILE_PATH), ref="main")
         
-        if not file_content.decoded_content:
-            st.warning("File exists but is empty")
-            return None
-            
         with st.spinner("Loading data..."):
-            return pd.read_excel(
-                io.BytesIO(file_content.decoded_content),
-                engine="openpyxl",
-                parse_dates=True,
-                dtype_backend="pyarrow"
-            )
-            
+            df = pd.read_excel(io.BytesIO(file_content.decoded_content), engine="openpyxl")
+        return df
     except UnknownObjectException:
-        st.warning("File not found in repository")
+        st.warning("File not found in repository. Upload a new file to get started.")
         return None
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
@@ -101,21 +74,10 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    # Validate file type
-    if uploaded_file.type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-        st.error("Invalid file format. Please upload a valid Excel XLSX file.")
-        st.stop()
-        
-    # Check for duplicate upload
-    if "last_upload" in st.session_state and st.session_state.last_upload == uploaded_file.getvalue():
-        st.warning("This file was already uploaded")
-        st.stop()
-        
     try:
         upload_to_github(uploaded_file.getvalue(), str(FILE_PATH))
         st.session_state.last_upload = uploaded_file.getvalue()
         st.rerun()  # Refresh data display
-        
     except Exception as e:
         st.error(f"Upload failed: {e}")
 
