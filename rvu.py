@@ -4,14 +4,13 @@ from github import Github, UnknownObjectException
 import io
 from pathlib import Path
 from datetime import datetime
-import base64
 
 # --- Configuration ---
 # Load GitHub credentials from Streamlit secrets
 GITHUB_TOKEN = st.secrets["github"]["token"]
 GITHUB_USERNAME = st.secrets["github"]["username"]
 GITHUB_REPO = st.secrets["github"]["repo"]
-FILE_PATH = "RVU_Daily_Master.xlsx"  # Adjust if needed
+FILE_PATH = "RVU_Daily_Master.xlsx"
 
 # --- GitHub Setup ---
 try:
@@ -27,15 +26,13 @@ def upload_to_github(file_bytes: bytes, file_name: str) -> None:
     try:
         commit_msg = f"Update {file_name} via MILV app - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         
-        # Encode file to Base64 for proper storage in GitHub
-        encoded_content = base64.b64encode(file_bytes).decode("utf-8")
-        
         try:
+            # Check if the file exists
             contents = repo.get_contents(file_name, ref="main")
             repo.update_file(
                 path=contents.path,
                 message=commit_msg,
-                content=encoded_content,
+                content=file_bytes,  # Store as raw binary
                 sha=contents.sha,
                 branch="main"
             )
@@ -44,7 +41,7 @@ def upload_to_github(file_bytes: bytes, file_name: str) -> None:
             repo.create_file(
                 path=file_name,
                 message=f"Initial upload: {commit_msg}",
-                content=encoded_content,
+                content=file_bytes,  # Store as raw binary
                 branch="main"
             )
             st.success("New file uploaded successfully to GitHub!")
@@ -56,8 +53,8 @@ def fetch_latest_file() -> pd.DataFrame:
     try:
         file_content = repo.get_contents(FILE_PATH, ref="main")
         
-        # Decode Base64 content back to binary
-        decoded_content = base64.b64decode(file_content.content)
+        # GitHub serves content as string, so we need to decode it properly
+        decoded_content = file_content.decoded_content  # Ensure we get binary data
 
         with st.spinner("Loading data..."):
             df = pd.read_excel(io.BytesIO(decoded_content), engine="openpyxl")
@@ -82,9 +79,10 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     try:
+        # Upload the file without triggering unnecessary reruns
         upload_to_github(uploaded_file.getvalue(), FILE_PATH)
-        st.session_state.last_upload = uploaded_file.getvalue()  # Store uploaded file in session
-        st.rerun()  # Refresh UI to reflect the update
+        st.session_state["last_upload"] = uploaded_file.getvalue()
+        st.experimental_rerun()  # Only reruns the necessary part of the app
     except Exception as e:
         st.error(f"Upload failed: {e}")
 
