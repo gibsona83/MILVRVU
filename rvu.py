@@ -10,10 +10,13 @@ def load_data(file):
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['Turnaround'] = pd.to_timedelta(df['Turnaround'], errors='coerce')
     df['Shift'] = df.get('shift', pd.Series()).fillna('No Shift in Qgenda')
+
+    # Check for missing required columns
     required_columns = ["Date", "Author", "Procedure", "Points", "Turnaround"]
     if not set(required_columns).issubset(df.columns):
         st.error("The uploaded file is missing required columns.")
         st.stop()
+
     numeric_columns = ['Procedure', 'Points', 'Points/half day', 'Procedure/half']
     df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
     return df
@@ -21,16 +24,18 @@ def load_data(file):
 st.set_page_config(page_title="RVU Daily Dashboard", layout="wide")
 
 # Load and display MILV logo in sidebar
-st.sidebar.image("milv.png", use_column_width=True)
+st.sidebar.image("milv.png", use_container_width=True)
 
 st.title("📊 RVU Daily Productivity Dashboard")
 
+# File Upload
 uploaded_file = st.sidebar.file_uploader("Upload RVU Daily Master File", type=["xlsx"])
 
 if uploaded_file is None:
     st.warning("Please upload an RVU Daily Master file to proceed.")
     st.stop()
 
+# Load data
 df = load_data(uploaded_file)
 
 # Sidebar Filters
