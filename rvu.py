@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from github import Github
-import base64
 import io
 
 # Load GitHub credentials from Streamlit secrets
@@ -14,18 +13,18 @@ FILE_PATH = "RVU_Daily_Master.xlsx"  # Adjust if file is inside a folder
 g = Github(GITHUB_TOKEN)
 repo = g.get_user().get_repo(GITHUB_REPO)
 
-def upload_to_github(file_content, file_name):
-    """Uploads or updates a file in GitHub repository with base64 encoding."""
+def upload_to_github(file_bytes, file_name):
+    """Uploads or updates an Excel file in GitHub repository."""
     try:
         file_path = file_name
-        file_base64 = base64.b64encode(file_content).decode("utf-8")  # Encode file
+        file_content = file_bytes.decode("latin1")  # Convert binary to text format
 
         try:
             contents = repo.get_contents(file_path)  # Check if file exists
-            repo.update_file(file_path, "Updating latest file", file_base64, contents.sha)
+            repo.update_file(file_path, "Updating latest file", file_content, contents.sha)
             st.success("File updated successfully in GitHub!")
         except:
-            repo.create_file(file_path, "Uploading new file", file_base64)
+            repo.create_file(file_path, "Uploading new file", file_content)
             st.success("New file uploaded successfully to GitHub!")
     
     except Exception as e:
@@ -35,7 +34,7 @@ def fetch_latest_file():
     """Fetches the latest file from GitHub and loads it into a DataFrame."""
     try:
         file_content = repo.get_contents(FILE_PATH)  # Get file from GitHub
-        decoded_content = base64.b64decode(file_content.content)  # Decode from base64
+        decoded_content = file_content.decoded_content  # Read raw binary content
 
         # Read Excel file with explicit engine
         df = pd.read_excel(io.BytesIO(decoded_content), engine="openpyxl")
