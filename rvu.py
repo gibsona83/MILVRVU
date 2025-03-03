@@ -98,11 +98,13 @@ if df is not None:
     # Determine min and max dates dynamically from the data
     df['Date'] = df['Date'].dt.date  # Convert to just date for selection
     min_date, max_date = df['Date'].min(), df['Date'].max()
-    start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date, key='date_range', format='YYYY-MM-DD')
+    start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=pd.to_datetime('2000-01-01').date(), max_value=pd.to_datetime('2100-12-31').date(), key='date_range')
     
     # Provider filter with dropdown, defaulting to all providers and allowing search/multi-select
     author_options = df['Author'].dropna().unique().tolist()
-    selected_authors = st.sidebar.multiselect("Select Provider(s)", options=author_options, default=author_options, help="Select one or more providers from the dropdown", key='provider_dropdown')
+    selected_authors = st.sidebar.selectbox("Select Provider(s)", options=["ALL"] + author_options, index=0, help="Select a provider from the dropdown", key='provider_dropdown')
+    if selected_authors == "ALL":
+        selected_authors = author_options
     
     # Filter Data by Date range and selected providers
     filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
