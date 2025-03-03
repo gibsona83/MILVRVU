@@ -30,7 +30,7 @@ def clean_and_process_data(uploaded_file):
 
         # Drop unnecessary columns and remove leading numeric index from Date
         df = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore')
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')  # Keep full datetime
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce', format='%Y-%m-%d')  # Keep full datetime
 
         # Ensure Turnaround is properly formatted
         def clean_turnaround(time_str):
