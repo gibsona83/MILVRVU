@@ -60,6 +60,7 @@ st.markdown(
         [data-testid="stSidebar"] {background-color: #002F6C; color: white;}
         h1, h2, h3, h4, h5, h6 {color: #002F6C !important;}
         .stButton>button {background-color: #004B87 !important; color: white; border-radius: 8px;}
+        .st-multi-select div[data-baseweb="select"] {height: 40px; border-radius: 8px;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -97,16 +98,16 @@ if df is not None:
     # Determine last date in the dataset for default selection
     last_date = df['Date'].max()
     
-    # Date filter with default to last available date, without timestamps
-    date_options = df['Date'].dropna().unique()
-    selected_dates = st.sidebar.multiselect("Select Date(s)", date_options, default=[last_date])
+    # Date range filter
+    min_date, max_date = df['Date'].min(), df['Date'].max()
+    start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
     
-    # Author filter as a dropdown with multi-select capability
+    # Provider filter with dropdown styling similar to Tableau
     author_options = df['Author'].dropna().unique()
     selected_authors = st.sidebar.multiselect("Select Provider(s)", author_options, default=author_options, help="Select one or more providers")
     
-    # Filter Data by Date and selected providers
-    filtered_df = df[df['Date'].isin(selected_dates) & df['Author'].isin(selected_authors)]
+    # Filter Data by Date range and selected providers
+    filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
     
     # KPI Summary with improved display
     st.subheader("Summary Statistics")
