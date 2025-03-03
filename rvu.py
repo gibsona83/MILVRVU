@@ -30,7 +30,7 @@ def clean_and_process_data(uploaded_file):
 
         # Drop unnecessary columns and remove leading numeric index from Date
         df = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore')
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date  # Ensure only date is stored
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')  # Keep full datetime
 
         # Ensure Turnaround is properly formatted
         def clean_turnaround(time_str):
@@ -96,6 +96,7 @@ if df is not None:
     st.sidebar.subheader("Filters")
     
     # Determine min and max dates dynamically from the data
+    df['Date'] = df['Date'].dt.date  # Convert to just date for selection
     min_date, max_date = df['Date'].min(), df['Date'].max()
     start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
     
