@@ -28,8 +28,9 @@ def clean_and_process_data(uploaded_file):
         xls = pd.ExcelFile(uploaded_file)
         df = pd.read_excel(xls, sheet_name='powerscribe Data')
 
-        # Drop unnecessary columns
+        # Drop unnecessary columns and remove leading numeric index from Date
         df = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore')
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 
         # Ensure Turnaround is properly formatted
         def clean_turnaround(time_str):
@@ -71,13 +72,13 @@ st.title("MILV Daily Productivity Dashboard")
 # File uploader
 uploaded_file = st.sidebar.file_uploader("Upload RVU Daily Master Excel File", type=["xlsx"])
 
-# Save the uploaded file if it exists
+# Save the uploaded file if it exists and push to GitHub storage
 if uploaded_file is not None:
     with open(LATEST_FILE_PATH, "wb") as f:
         f.write(uploaded_file.getbuffer())
     st.sidebar.success("File uploaded successfully! Data will persist until a new file is uploaded.")
 
-# Download the latest file from GitHub if no new file is uploaded
+# Ensure the latest uploaded file is loaded for all users
 if uploaded_file is None and not os.path.exists(LATEST_FILE_PATH):
     if download_latest_file():
         st.sidebar.success("Latest file downloaded from GitHub repository.")
@@ -93,26 +94,30 @@ else:
 if df is not None:
     st.sidebar.subheader("Filters")
     
-    # Date filter
-    date_options = df['Date'].dropna().unique()
-    selected_dates = st.sidebar.multiselect("Select Date(s)", date_options, default=date_options[-1:])
+    # Determine last date in the dataset for default selection
+    last_date = df['Date'].max()
     
-    # Author filter
+    # Date filter with default to last available date
+    date_options = df['Date'].dropna().unique()
+    selected_dates = st.sidebar.multiselect("Select Date(s)", date_options, default=[last_date])
+    
+    # Author filter with true multi-select, defaulting to all
     author_options = df['Author'].dropna().unique()
     selected_authors = st.sidebar.multiselect("Select Author(s)", author_options, default=author_options)
     
-    # Filter Data
+    # Filter Data by Date and selected providers
     filtered_df = df[df['Date'].isin(selected_dates) & df['Author'].isin(selected_authors)]
     
-    # KPI Summary
+    # KPI Summary with improved display
     st.subheader("Summary Statistics")
-    st.metric("Avg Points/Half Day", round(filtered_df['Points/half day'].mean(), 2))
-    st.metric("Avg Procedures/Half Day", round(filtered_df['Procedure/half'].mean(), 2))
-    st.metric("Avg Turnaround Time", str(filtered_df['Turnaround'].mean()))
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Avg Points/Half Day", round(filtered_df['Points/half day'].mean(), 2))
+    col2.metric("Avg Procedures/Half Day", round(filtered_df['Procedure/half'].mean(), 2))
+    col3.metric("Avg Turnaround Time", str(filtered_df['Turnaround'].mean()).split('.')[0])
     
-    # Show Data
+    # Show Data without numeric prefixes
     st.subheader("Filtered Data")
-    st.dataframe(filtered_df)
+    st.dataframe(filtered_df.drop(columns=['Shift'], errors='ignore'))
     
     # Charts
     st.subheader("Performance Visualization")
