@@ -30,7 +30,7 @@ def clean_and_process_data(uploaded_file):
 
         # Drop unnecessary columns and remove leading numeric index from Date
         df = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore')
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce', format='%Y-%m-%d')  # Keep full datetime
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce', format='%Y-%m-%d')
 
         # Ensure Turnaround is properly formatted
         def clean_turnaround(time_str):
@@ -98,15 +98,11 @@ if df is not None:
     # Determine min and max dates dynamically from the data
     df['Date'] = df['Date'].dt.date  # Convert to just date for selection
     min_date, max_date = df['Date'].min(), df['Date'].max()
-    date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date, format="YYYY-MM-DD")
-    if isinstance(date_range, list) and len(date_range) == 2:
-        start_date, end_date = date_range
-    else:
-        start_date, end_date = min_date, max_date
+    start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date, key='date_range')
     
     # Provider filter with dropdown, defaulting to all providers and allowing search/multi-select
-    author_options = df['Author'].dropna().unique()
-    selected_authors = st.sidebar.multiselect("Select Provider(s)", author_options, default=author_options, help="Select one or more providers from the dropdown")
+    author_options = df['Author'].dropna().unique().tolist()
+    selected_authors = st.sidebar.multiselect("Select Provider(s)", options=author_options, default=author_options, help="Select one or more providers from the dropdown", key='provider_dropdown')
     
     # Filter Data by Date range and selected providers
     filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
