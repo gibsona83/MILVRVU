@@ -138,5 +138,5 @@ if df is not None:
     st.dataframe(filtered_df.drop(columns=['Shift'], errors='ignore'))
     
     # Charts
-    st.subheader("Performance Visualization")
-    st.line_chart(filtered_df.groupby('Date')[['Points/half day', 'Procedure/half']].mean())
+    st.subheader("Executive Performance Overview")
+    st.line_chart(filtered_df.groupby('Date').agg({'Points/half day': 'mean', 'Procedure/half': 'mean', 'Turnaround': 'mean'}))
