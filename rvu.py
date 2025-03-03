@@ -95,27 +95,29 @@ else:
 if df is not None:
     st.sidebar.subheader("Filters")
     
-    # Determine last date in the dataset for default selection
-    last_date = df['Date'].max()
-    
-    # Date range filter
+    # Determine min and max dates dynamically from the data
     min_date, max_date = df['Date'].min(), df['Date'].max()
     start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
     
-    # Provider filter with dropdown defaulting to 'ALL' providers and allowing search/multi-select
+    # Provider filter with dropdown, defaulting to all providers and allowing search/multi-select
     author_options = df['Author'].dropna().unique()
-    selected_authors = st.sidebar.multiselect("Select Provider(s)", ["ALL"] + list(author_options), default=["ALL"], help="Select one or more providers from the dropdown")
+    selected_authors = st.sidebar.multiselect("Select Provider(s)", author_options, default=author_options, help="Select one or more providers from the dropdown")
     
-    # Adjust filtering logic: If 'ALL' is selected, include all providers
-    if "ALL" in selected_authors:
-        filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
-    else:
-        filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
+    # Filter Data by Date range and selected providers
+    filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
     
     # KPI Summary with improved display
     st.subheader("Summary Statistics")
     col1, col2, col3 = st.columns(3)
     col1.metric("Avg Points/Half Day", round(filtered_df['Points/half day'].mean(), 2))
     col2.metric("Avg Procedures/Half Day", round(filtered_df['Procedure/half'].mean(), 2))
-    avg_turnaround = filtered_df['Turnaround'].mean()
-    avg_turnaround = str(avg_turnaround).split(' days ')[-1].split('.')[0] if pd.notna(avg_turnaround) else "N/A"
+    avg_turnaround = str(filtered_df['Turnaround'].mean()).split(' days ')[-1].split('.')[0] if pd.notna(filtered_df['Turnaround'].mean()) else "N/A"
+    col3.metric("Avg Turnaround Time", avg_turnaround)
+    
+    # Show Data without numeric prefixes
+    st.subheader("Filtered Data")
+    st.dataframe(filtered_df.drop(columns=['Shift'], errors='ignore'))
+    
+    # Charts
+    st.subheader("Performance Visualization")
+    st.line_chart(filtered_df.groupby('Date')[['Points/half day', 'Procedure/half']].mean())
