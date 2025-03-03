@@ -96,18 +96,50 @@ else:
 if df is not None:
     st.sidebar.subheader("Filters")
     
-    # Ensure only valid dates from the dataset are selectable
-    valid_dates = df['Date'].dropna().unique()
-    start_date, end_date = st.sidebar.date_input("Select Date Range", [min(valid_dates), max(valid_dates)], min_value=min(valid_dates), max_value=max(valid_dates), key='date_range')
-    
-    # Provider filter with dropdown
+    # Provider filter with dynamic date range handling
     author_options = df['Author'].dropna().unique().tolist()
-    selected_authors = st.sidebar.selectbox("Select Provider(s)", options=["ALL"] + author_options, index=0, help="Select a provider from the dropdown", key='provider_dropdown')
-    if selected_authors == "ALL":
+    selected_author = st.sidebar.selectbox(
+        "Select Provider:",
+        options=["ALL"] + author_options,
+        index=0,
+        help="Select a provider from the dropdown",
+        key='provider_dropdown'
+    )
+
+    # Determine date range based on selection
+    if selected_author == "ALL":
+        min_date = df['Date'].min()
+        max_date = df['Date'].max()
         selected_authors = author_options
-    
+    else:
+        provider_df = df[df['Author'] == selected_author]
+        min_date = provider_df['Date'].min()
+        max_date = provider_df['Date'].max()
+        selected_authors = [selected_author]
+
+    # Handle potential NaT values
+    min_date = min_date if not pd.isna(min_date) else df['Date'].min()
+    max_date = max_date if not pd.isna(max_date) else df['Date'].max()
+
+    # Date range selector
+    start_date, end_date = st.sidebar.date_input(
+        "Select Date Range:",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        key='date_range'
+    )
+
+    # Convert dates to pandas datetime
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+
     # Filter Data by Date range and selected providers
-    filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
+    filtered_df = df[
+        (df['Date'] >= start_date) & 
+        (df['Date'] <= end_date) & 
+        df['Author'].isin(selected_authors)
+    ]
     
     # KPI Summary with improved display
     st.subheader("Summary Statistics")
