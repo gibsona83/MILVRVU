@@ -120,7 +120,10 @@ if df is not None:
         selected_authors = author_options
     
     # Filter Data by Date range and selected providers
-    filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
+    if "ALL" in selected_authors or not selected_authors:
+        selected_authors = df['Author'].unique()
+    latest_date = df['Date'].max() if "ALL" in selected_authors else end_date
+    filtered_df = df[(df['Date'] == latest_date) & df['Author'].isin(selected_authors)]
     
     # KPI Summary with improved display
     st.subheader("Summary Statistics")
