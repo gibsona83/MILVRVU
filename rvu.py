@@ -30,7 +30,7 @@ def clean_and_process_data(uploaded_file):
 
         # Drop unnecessary columns and remove leading numeric index from Date
         df = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore')
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date  # Ensure only date is stored
 
         # Ensure Turnaround is properly formatted
         def clean_turnaround(time_str):
@@ -97,13 +97,13 @@ if df is not None:
     # Determine last date in the dataset for default selection
     last_date = df['Date'].max()
     
-    # Date filter with default to last available date
+    # Date filter with default to last available date, without timestamps
     date_options = df['Date'].dropna().unique()
     selected_dates = st.sidebar.multiselect("Select Date(s)", date_options, default=[last_date])
     
-    # Author filter with true multi-select, defaulting to all
+    # Author filter as a dropdown with multi-select capability
     author_options = df['Author'].dropna().unique()
-    selected_authors = st.sidebar.multiselect("Select Author(s)", author_options, default=author_options)
+    selected_authors = st.sidebar.multiselect("Select Provider(s)", author_options, default=author_options, help="Select one or more providers")
     
     # Filter Data by Date and selected providers
     filtered_df = df[df['Date'].isin(selected_dates) & df['Author'].isin(selected_authors)]
@@ -113,7 +113,8 @@ if df is not None:
     col1, col2, col3 = st.columns(3)
     col1.metric("Avg Points/Half Day", round(filtered_df['Points/half day'].mean(), 2))
     col2.metric("Avg Procedures/Half Day", round(filtered_df['Procedure/half'].mean(), 2))
-    col3.metric("Avg Turnaround Time", str(filtered_df['Turnaround'].mean()).split('.')[0])
+    avg_turnaround = str(filtered_df['Turnaround'].mean()).split(' days ')[-1].split('.')[0]  # Remove 'days' and decimals
+    col3.metric("Avg Turnaround Time", avg_turnaround)
     
     # Show Data without numeric prefixes
     st.subheader("Filtered Data")
