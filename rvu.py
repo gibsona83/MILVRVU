@@ -98,7 +98,13 @@ if df is not None:
     # Determine min and max dates dynamically from the data
     df['Date'] = df['Date'].dt.date  # Convert to just date for selection
     min_date, max_date = df['Date'].min(), df['Date'].max()
-    start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=pd.to_datetime('2000-01-01').date(), max_value=pd.to_datetime('2100-12-31').date(), key='date_range')
+    start_date, end_date = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date, key='date_range')
+    start_date = max(start_date, min_date)
+    end_date = min(end_date, max_date)
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        start_date, end_date = min_date, max_date
     
     # Provider filter with dropdown, defaulting to all providers and allowing search/multi-select
     author_options = df['Author'].dropna().unique().tolist()
