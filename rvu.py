@@ -139,4 +139,25 @@ if df is not None:
     
     # Charts
     st.subheader("Executive Performance Overview")
-    st.line_chart(filtered_df.groupby('Date').agg({'Points/half day': 'mean', 'Procedure/half': 'mean', 'Turnaround': 'mean'}))
+    import matplotlib.pyplot as plt
+import seaborn as sns
+
+st.subheader("Executive Performance Overview")
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot Points per Half Day
+sns.lineplot(data=filtered_df, x='Date', y='Points/half day', marker='o', label='Points per Half Day', ax=ax)
+
+# Plot Procedure per Half Day
+sns.lineplot(data=filtered_df, x='Date', y='Procedure/half', marker='o', label='Procedure per Half Day', ax=ax)
+
+# Format Turnaround Time to minutes before plotting
+if 'Turnaround' in filtered_df.columns:
+    filtered_df['Turnaround'] = filtered_df['Turnaround'].dt.total_seconds() / 60  # Convert to minutes
+    sns.lineplot(data=filtered_df, x='Date', y='Turnaround', marker='o', label='Turnaround (Minutes)', ax=ax, color='red')
+
+ax.set_ylabel("Values")
+ax.set_xlabel("Date")
+ax.set_title("Executive Performance Overview")
+ax.legend()
+st.pyplot(fig)
