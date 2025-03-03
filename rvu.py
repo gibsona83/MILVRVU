@@ -98,7 +98,12 @@ if df is not None:
     # Determine min and max dates dynamically from the data
     df['Date'] = df['Date'].dt.date  # Convert to just date for selection
     min_date, max_date = df['Date'].min(), df['Date'].max()
-    date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date, key='date_range')
+    valid_dates = df['Date'].dropna().unique()
+date_range = st.sidebar.date_input("Select Date Range", [min(valid_dates), max(valid_dates)], min_value=min(valid_dates), max_value=max(valid_dates), key='date_range')
+if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+    start_date, end_date = date_range
+else:
+    start_date, end_date = min(valid_dates), max(valid_dates)
     if isinstance(date_range, list) or isinstance(date_range, tuple):
         if len(date_range) == 2:
             start_date, end_date = date_range
@@ -140,6 +145,7 @@ if df is not None:
     # Charts
     st.subheader("Executive Performance Overview")
     import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 
 st.subheader("Executive Performance Overview")
