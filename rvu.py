@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import requests
+import matplotlib.pyplot as plt
 
 # Define GitHub repository details
 GITHUB_REPO = "gibsona83/milvrvu"
@@ -95,40 +96,18 @@ else:
 if df is not None:
     st.sidebar.subheader("Filters")
     
-    # Determine min and max dates dynamically from the data
-    df['Date'] = df['Date'].dt.date  # Convert to just date for selection
-    min_date, max_date = df['Date'].min(), df['Date'].max()
+    # Ensure only valid dates from the dataset are selectable
     valid_dates = df['Date'].dropna().unique()
-date_range = st.sidebar.date_input("Select Date Range", [min(valid_dates), max(valid_dates)], min_value=min(valid_dates), max_value=max(valid_dates), key='date_range')
-if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-    start_date, end_date = date_range
-else:
-    start_date, end_date = min(valid_dates), max(valid_dates)
-    if isinstance(date_range, list) or isinstance(date_range, tuple):
-        if len(date_range) == 2:
-            start_date, end_date = date_range
-        else:
-            start_date, end_date = min_date, max_date
-    else:
-        start_date, end_date = min_date, max_date
-    start_date = max(start_date, min_date)
-    end_date = min(end_date, max_date)
-    if isinstance(date_range, tuple) and len(date_range) == 2:
-        start_date, end_date = date_range
-    else:
-        start_date, end_date = min_date, max_date
+    start_date, end_date = st.sidebar.date_input("Select Date Range", [min(valid_dates), max(valid_dates)], min_value=min(valid_dates), max_value=max(valid_dates), key='date_range')
     
-    # Provider filter with dropdown, defaulting to all providers and allowing search/multi-select
+    # Provider filter with dropdown
     author_options = df['Author'].dropna().unique().tolist()
     selected_authors = st.sidebar.selectbox("Select Provider(s)", options=["ALL"] + author_options, index=0, help="Select a provider from the dropdown", key='provider_dropdown')
     if selected_authors == "ALL":
         selected_authors = author_options
     
     # Filter Data by Date range and selected providers
-    if "ALL" in selected_authors or not selected_authors:
-        selected_authors = df['Author'].unique()
-    latest_date = df['Date'].max() if "ALL" in selected_authors else end_date
-    filtered_df = df[(df['Date'] == latest_date) & df['Author'].isin(selected_authors)]
+    filtered_df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date) & df['Author'].isin(selected_authors)]
     
     # KPI Summary with improved display
     st.subheader("Summary Statistics")
@@ -142,28 +121,16 @@ else:
     st.subheader("Filtered Data")
     st.dataframe(filtered_df.drop(columns=['Shift'], errors='ignore'))
     
-    # Charts
+    # Executive Performance Visualization
     st.subheader("Executive Performance Overview")
-    import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
-
-st.subheader("Executive Performance Overview")
-fig, ax = plt.subplots(figsize=(10, 5))
-
-# Plot Points per Half Day
-sns.lineplot(data=filtered_df, x='Date', y='Points/half day', marker='o', label='Points per Half Day', ax=ax)
-
-# Plot Procedure per Half Day
-sns.lineplot(data=filtered_df, x='Date', y='Procedure/half', marker='o', label='Procedure per Half Day', ax=ax)
-
-# Format Turnaround Time to minutes before plotting
-if 'Turnaround' in filtered_df.columns:
-    filtered_df['Turnaround'] = filtered_df['Turnaround'].dt.total_seconds() / 60  # Convert to minutes
-    sns.lineplot(data=filtered_df, x='Date', y='Turnaround', marker='o', label='Turnaround (Minutes)', ax=ax, color='red')
-
-ax.set_ylabel("Values")
-ax.set_xlabel("Date")
-ax.set_title("Executive Performance Overview")
-ax.legend()
-st.pyplot(fig)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(filtered_df['Date'], filtered_df['Points/half day'], marker='o', label='Points per Half Day')
+    ax.plot(filtered_df['Date'], filtered_df['Procedure/half'], marker='o', label='Procedure per Half Day')
+    if 'Turnaround' in filtered_df.columns:
+        filtered_df['Turnaround'] = filtered_df['Turnaround'].dt.total_seconds() / 60  # Convert to minutes
+        ax.plot(filtered_df['Date'], filtered_df['Turnaround'], marker='o', label='Turnaround (Minutes)', color='red')
+    ax.set_ylabel("Values")
+    ax.set_xlabel("Date")
+    ax.set_title("Executive Performance Overview")
+    ax.legend()
+    st.pyplot(fig)
