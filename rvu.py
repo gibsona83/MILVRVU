@@ -1,10 +1,17 @@
+# Set Matplotlib backend first
+import matplotlib
+matplotlib.use('Agg')  # Required for headless environments
+import matplotlib.pyplot as plt
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import os
 import requests
-import matplotlib.pyplot as plt
 
+# Rest of your existing code follows below...
+# [Keep all your original code from here downward unchanged]
+# ----------------------------------------------------------
 # Define GitHub repository details
 GITHUB_REPO = "gibsona83/milvrvu"
 LATEST_FILE_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/latest_uploaded_file.xlsx"
@@ -15,154 +22,4 @@ LATEST_FILE_PATH = "latest_uploaded_file.xlsx"
 def download_latest_file():
     try:
         response = requests.get(LATEST_FILE_URL)
-        if response.status_code == 200:
-            with open(LATEST_FILE_PATH, "wb") as f:
-                f.write(response.content)
-            return True
-    except Exception as e:
-        st.sidebar.error(f"Error fetching file from GitHub: {e}")
-    return False
-
-# Function to clean and process uploaded data
-def clean_and_process_data(uploaded_file):
-    if uploaded_file is not None:
-        xls = pd.ExcelFile(uploaded_file)
-        df = pd.read_excel(xls, sheet_name='powerscribe Data')
-
-        # Drop unnecessary columns and remove leading numeric index from Date
-        df = df.drop(columns=[col for col in df.columns if 'Unnamed' in col], errors='ignore')
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce', format='%Y-%m-%d')
-
-        # Ensure Turnaround is properly formatted
-        def clean_turnaround(time_str):
-            try:
-                if pd.isna(time_str):
-                    return np.nan
-                if isinstance(time_str, str):
-                    if '.' in time_str:
-                        time_str = time_str.replace('.', ' days ')
-                    return pd.to_timedelta(time_str, errors='coerce')
-                return np.nan
-            except:
-                return np.nan
-
-        df['Turnaround'] = df['Turnaround'].astype(str).apply(clean_turnaround)
-        return df
-    return None
-
-# Streamlit UI
-st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
-
-# Apply custom styling
-st.markdown(
-    """
-    <style>
-        .main {background-color: #f4f4f4;}
-        [data-testid="stSidebar"] {background-color: #002F6C; color: white;}
-        h1, h2, h3, h4, h5, h6 {color: #002F6C !important;}
-        .stButton>button {background-color: #004B87 !important; color: white; border-radius: 8px;}
-        .st-multi-select div[data-baseweb="select"] {height: 40px; border-radius: 8px;}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Display logo
-st.image(LOGO_URL, width=300)
-st.title("MILV Daily Productivity Dashboard")
-
-# File uploader
-uploaded_file = st.sidebar.file_uploader("Upload RVU Daily Master Excel File", type=["xlsx"])
-
-# Save the uploaded file if it exists and push to GitHub storage
-if uploaded_file is not None:
-    with open(LATEST_FILE_PATH, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    st.sidebar.success("File uploaded successfully! Data will persist until a new file is uploaded.")
-
-# Ensure the latest uploaded file is loaded for all users
-if uploaded_file is None and not os.path.exists(LATEST_FILE_PATH):
-    if download_latest_file():
-        st.sidebar.success("Latest file downloaded from GitHub repository.")
-    else:
-        st.sidebar.error("No file found locally or on GitHub.")
-
-# Load the latest available file
-if os.path.exists(LATEST_FILE_PATH):
-    df = clean_and_process_data(LATEST_FILE_PATH)
-else:
-    df = None
-
-if df is not None:
-    st.sidebar.subheader("Filters")
-    
-    # Provider filter with dynamic date range handling
-    author_options = df['Author'].dropna().unique().tolist()
-    selected_author = st.sidebar.selectbox(
-        "Select Provider:",
-        options=["ALL"] + author_options,
-        index=0,
-        help="Select a provider from the dropdown",
-        key='provider_dropdown'
-    )
-
-    # Determine date range based on selection
-    if selected_author == "ALL":
-        min_date = df['Date'].min()
-        max_date = df['Date'].max()
-        selected_authors = author_options
-    else:
-        provider_df = df[df['Author'] == selected_author]
-        min_date = provider_df['Date'].min()
-        max_date = provider_df['Date'].max()
-        selected_authors = [selected_author]
-
-    # Handle potential NaT values
-    min_date = min_date if not pd.isna(min_date) else df['Date'].min()
-    max_date = max_date if not pd.isna(max_date) else df['Date'].max()
-
-    # Date range selector
-    start_date, end_date = st.sidebar.date_input(
-        "Select Date Range:",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-        key='date_range'
-    )
-
-    # Convert dates to pandas datetime
-    start_date = pd.to_datetime(start_date)
-    end_date = pd.to_datetime(end_date)
-
-    # Filter Data by Date range and selected providers
-    filtered_df = df[
-        (df['Date'] >= start_date) & 
-        (df['Date'] <= end_date) & 
-        df['Author'].isin(selected_authors)
-    ]
-    
-    # KPI Summary with improved display
-    st.subheader("Summary Statistics")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Avg Points/Half Day", round(filtered_df['Points/half day'].mean(), 2))
-    col2.metric("Avg Procedures/Half Day", round(filtered_df['Procedure/half'].mean(), 2))
-    avg_turnaround = str(filtered_df['Turnaround'].mean()).split(' days ')[-1].split('.')[0] if pd.notna(filtered_df['Turnaround'].mean()) else "N/A"
-    col3.metric("Avg Turnaround Time", avg_turnaround)
-    
-    # Show Data without numeric prefixes
-    st.subheader("Filtered Data")
-    st.dataframe(filtered_df.drop(columns=['Shift'], errors='ignore'))
-    
-    # Executive Performance Visualization
-    st.subheader("Executive Performance Overview")
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(filtered_df['Date'], filtered_df['Points/half day'], marker='o', label='Points per Half Day')
-    ax.plot(filtered_df['Date'], filtered_df['Procedure/half'], marker='o', label='Procedure per Half Day')
-    if 'Turnaround' in filtered_df.columns:
-        filtered_df['Turnaround'] = filtered_df['Turnaround'].dt.total_seconds() / 60  # Convert to minutes
-        ax.plot(filtered_df['Date'], filtered_df['Turnaround'], marker='o', label='Turnaround (Minutes)', color='red')
-    ax.set_ylabel("Values")
-    ax.set_xlabel("Date")
-    ax.set_title("Executive Performance Overview")
-    ax.legend()
-    st.pyplot(fig)
+    # ... [Keep all other functions and logic exactly as before]
