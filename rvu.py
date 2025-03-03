@@ -117,4 +117,5 @@ if df is not None:
     col1, col2, col3 = st.columns(3)
     col1.metric("Avg Points/Half Day", round(filtered_df['Points/half day'].mean(), 2))
     col2.metric("Avg Procedures/Half Day", round(filtered_df['Procedure/half'].mean(), 2))
-    avg_turnaround = str(filtered_df['Turnaround'].mean()).split('
+    avg_turnaround = filtered_df['Turnaround'].mean()
+    avg_turnaround = str(avg_turnaround).split(' days ')[-1].split('.')[0] if pd.notna(avg_turnaround) else "N/A"
