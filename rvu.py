@@ -18,9 +18,10 @@ def load_roster():
     try:
         roster_df = pd.read_csv(roster_path)
         
-        # Clean up employment type formatting
+        # Clean up employment type formatting and remove NaN values
         roster_df["Employment Type"] = roster_df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
-        
+        roster_df["Employment Type"].fillna("Unknown", inplace=True)  # Ensure no NaN
+
         return roster_df
     except Exception as e:
         st.error(f"Error loading MILV Roster: {e}")
@@ -56,7 +57,7 @@ def load_data(file):
         if roster_df is not None:
             rvu_df = rvu_df.merge(roster_df, on="Provider", how="left")
 
-        # Fill missing Employment Type with "Unknown" instead of NaN
+        # Fill missing Employment Type with "Unknown"
         rvu_df["Employment Type"].fillna("Unknown", inplace=True)
 
         # Drop NaNs in essential columns
@@ -85,11 +86,11 @@ def filter_data(df, date_range, providers, employment_type, subspecialty):
 
 def plot_bar_chart(df, x_col, y_col, title, color_col=None):
     """Generates a bar chart if the required columns are present."""
-    if y_col in df.columns:
+    if y_col in df.columns and not df.empty:
         fig = px.bar(df, x=x_col, y=y_col, color=color_col, title=title)
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning(f"'{y_col}' column is missing in the data.")
+        st.warning(f"'{y_col}' column is missing or no data available.")
 
 if uploaded_file:
     df = load_data(uploaded_file)
@@ -99,12 +100,14 @@ if uploaded_file:
 
         # Sidebar filters
         min_date, max_date = df['Date'].min(), df['Date'].max()
+        
+        # Date range selection
         date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
 
         provider_options = ["ALL"] + sorted(df["Provider"].dropna().unique().tolist())
         selected_providers = st.sidebar.multiselect("Select Provider(s)", provider_options, default=["ALL"])
 
-        employment_options = ["ALL"] + sorted(df["Employment Type"].unique().tolist())
+        employment_options = ["ALL"] + sorted(df["Employment Type"].dropna().unique().tolist())
         selected_employment = st.sidebar.multiselect("Select Employment Type", employment_options, default=["ALL"])
 
         subspecialty_options = ["ALL"] + sorted(df["Primary Subspecialty"].dropna().unique().tolist())
