@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import os  # Ensure os is imported
+import os
 
 # Load MILV logo from GitHub
 LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
@@ -104,6 +104,9 @@ if df is not None and not df_filtered.empty:
     # Drop unnecessary columns
     df_filtered = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col], errors="ignore")
 
+    # Ensure Date is displayed correctly for charts
+    df_filtered["Date"] = df_filtered["Date"].astype(str)  # 🔥 Ensure only dates are shown (not timestamps)
+
     # Display Summary Statistics
     st.title("📊 MILV Daily Productivity Dashboard")
     st.subheader(f"📋 Productivity Summary")
@@ -125,22 +128,31 @@ if df is not None and not df_filtered.empty:
     # Visualization Section
     st.subheader("📊 Performance Insights")
 
+    # Dynamically adjust chart size based on date selection
+    if len(df_filtered["Date"].unique()) == 1:
+        category_order = [df_filtered["Date"].unique()[0]]
+    else:
+        category_order = df_filtered["Date"].unique().tolist()
+
     # Plot Turnaround Time Trends
     if "Turnaround Time" in df_filtered.columns:
         fig1 = px.line(df_filtered, x="Date", y="Turnaround Time", color="Provider",
-                       title="Turnaround Time Trends (Minutes)", markers=True)
+                       title="Turnaround Time Trends (Minutes)", markers=True,
+                       category_orders={"Date": category_order})
         st.plotly_chart(fig1, use_container_width=True)
 
     # Plot Procedures per Half Day
     if "Procedures per Half-Day" in df_filtered.columns:
         fig2 = px.bar(df_filtered, x="Date", y="Procedures per Half-Day", color="Provider",
-                      title="Procedures per Half Day by Provider", barmode="group")
+                      title="Procedures per Half Day by Provider", barmode="group",
+                      category_orders={"Date": category_order})
         st.plotly_chart(fig2, use_container_width=True)
 
     # Plot Points per Half Day
     if "Points per Half-Day" in df_filtered.columns:
         fig3 = px.line(df_filtered, x="Date", y="Points per Half-Day", color="Provider",
-                       title="Points per Half Day Over Time", markers=True)
+                       title="Points per Half Day Over Time", markers=True,
+                       category_orders={"Date": category_order})
         st.plotly_chart(fig3, use_container_width=True)
 
     # Display filtered data in a table
