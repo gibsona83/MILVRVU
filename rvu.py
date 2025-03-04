@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
-import os
+import io
 
 # Set Streamlit page configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -11,35 +11,28 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 GITHUB_IMAGE_URL = "https://raw.githubusercontent.com/gibsona83/MILVRVU/main/milv.png"
 GITHUB_ROSTER_URL = "https://raw.githubusercontent.com/gibsona83/MILVRVU/main/MILVRoster.csv"
 
-# Local File Paths
-IMAGE_PATH = "/mnt/data/milv.png"
-ROSTER_PATH = "/mnt/data/MILVRoster.csv"
-
-def download_file(url, save_path):
-    """Downloads a file from GitHub and ensures it's saved locally."""
+def fetch_csv_from_github(url):
+    """Fetch CSV file directly from GitHub without saving locally."""
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
-            with open(save_path, "wb") as f:
-                f.write(response.content)
-            st.success(f"✅ Successfully downloaded {os.path.basename(save_path)}")
-            return True
+            return pd.read_csv(io.StringIO(response.text))
         else:
-            st.error(f"❌ Failed to download {os.path.basename(save_path)} (HTTP {response.status_code})")
-            return False
+            st.error(f"❌ Failed to fetch file from {url} (HTTP {response.status_code})")
+            return None
     except Exception as e:
-        st.error(f"❌ Error downloading {os.path.basename(save_path)}: {e}")
-        return False
+        st.error(f"❌ Error fetching file from {url}: {e}")
+        return None
 
-# Ensure `milv.png` is available before using it
-if not os.path.exists(IMAGE_PATH):
-    st.info("📥 Downloading `milv.png` from GitHub...")
-    download_file(GITHUB_IMAGE_URL, IMAGE_PATH)
-
-if os.path.exists(IMAGE_PATH):
-    st.image(IMAGE_PATH, width=250)
-else:
-    st.warning("⚠️ Logo image not found. Using default styling.")
+# Load `milv.png` directly from GitHub
+try:
+    response = requests.get(GITHUB_IMAGE_URL, timeout=10)
+    if response.status_code == 200:
+        st.image(io.BytesIO(response.content), width=250)
+    else:
+        st.warning("⚠️ Could not load logo image from GitHub. Using default styling.")
+except Exception as e:
+    st.warning(f"⚠️ Error loading logo image: {e}")
 
 st.title("📊 MILV Daily Productivity")
 
@@ -50,15 +43,9 @@ with st.sidebar:
 
 @st.cache_data
 def load_roster():
-    """Loads the MILV Roster from GitHub and processes it."""
-    if not os.path.exists(ROSTER_PATH):
-        st.info("📥 Downloading `MILVRoster.csv` from GitHub...")
-        if not download_file(GITHUB_ROSTER_URL, ROSTER_PATH):
-            return None
-
-    try:
-        df = pd.read_csv(ROSTER_PATH)
-
+    """Loads MILV Roster directly from GitHub without local storage."""
+    df = fetch_csv_from_github(GITHUB_ROSTER_URL)
+    if df is not None:
         # Clean up Employment Type formatting
         df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
         df["Employment Type"].fillna("Unknown", inplace=True)
@@ -66,10 +53,7 @@ def load_roster():
         # Assign "NON MILV" if Primary Subspecialty is missing
         df["Primary Subspecialty"].fillna("NON MILV", inplace=True)
 
-        return df
-    except Exception as e:
-        st.error(f"Error loading MILV Roster: {e}")
-        return None
+    return df
 
 def convert_turnaround(time_value):
     """Converts turnaround time from HH:MM:SS or float to minutes."""
