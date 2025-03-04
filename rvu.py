@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import re  # For regex filtering of employment type
 
 # Load MILV logo from GitHub
 LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
@@ -25,7 +26,7 @@ def save_uploaded_file(uploaded_file):
 # Convert Turnaround Time safely to minutes
 def convert_turnaround(time_value):
     try:
-        return pd.to_timedelta(time_value).total_seconds() / 60  # Convert to minutes
+        return pd.to_timedelta(time_value).total_seconds() / 60
     except:
         return None  # Return None for invalid values
 
@@ -35,6 +36,10 @@ def load_roster():
         return pd.read_csv(ROSTER_FILE_PATH)
     return None
 
+# Function to clean Employment Type (remove brackets and content inside)
+def clean_employment_type(value):
+    return re.sub(r"\s*\[.*?\]", "", str(value)).strip()
+
 # Set Streamlit theme settings
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
@@ -42,10 +47,10 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 with st.sidebar:
     st.image(LOGO_URL, use_container_width=True)
 
-    # Load roster data
+    # Load Roster Data
     roster_df = load_roster()
 
-    # Load existing file
+    # Load RVU Data
     df = load_last_uploaded_file()
 
     if df is not None:
@@ -62,13 +67,20 @@ with st.sidebar:
     if df is not None and roster_df is not None:
         df = df.merge(roster_df, on="Provider", how="left")
 
-    # Sidebar - Date Selection
-    st.subheader("📅 Select Date or Range")
+        # Clean Employment Type column
+        if "Employment Type" in df.columns:
+            df["Employment Type"] = df["Employment Type"].apply(clean_employment_type)
 
+    # Ensure 'Date' column is formatted correctly
     if df is not None and "Date" in df.columns:
         df["Date"] = pd.to_datetime(df["Date"]).dt.date
-        latest_date = df["Date"].max()
 
+        # Load default data as the latest date in dataset
+        latest_date = df["Date"].max()
+        df_filtered = df[df["Date"] == latest_date]
+
+        # Date Filter UI
+        st.subheader("📅 Select Date or Range")
         date_filter_option = st.radio("Select Date Filter:", ["Single Date", "Date Range"], horizontal=True)
 
         if date_filter_option == "Single Date":
@@ -89,8 +101,6 @@ with st.sidebar:
 
             if "ALL" not in selected_providers:
                 df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
-        else:
-            st.warning("⚠️ No 'Provider' column found in the dataset.")
 
         # Employment Type Filter
         if "Employment Type" in df_filtered.columns:
@@ -114,11 +124,6 @@ with st.sidebar:
             if "ALL" not in selected_subspecialties:
                 df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
 
-    # Upload File Section
-    st.markdown("---")
-    st.subheader("📂 Upload Daily RVU File")
-    uploaded_file = st.file_uploader("", type=["xlsx"])
-
 # Load data from uploaded file
 if uploaded_file:
     df = save_uploaded_file(uploaded_file)
@@ -134,11 +139,11 @@ if df is not None and not df_filtered.empty:
 
     df_filtered = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col], errors="ignore")
 
-    df_filtered["Date"] = df_filtered["Date"].astype(str)
+    df_filtered["Date"] = df_filtered["Date"].astype(str)  # Ensure only date, no timestamps
 
     # Display Summary Statistics
     st.title("📊 MILV Daily Productivity Dashboard")
-    st.subheader("📋 Productivity Summary")
+    st.subheader(f"📋 Productivity Summary for {latest_date}")
 
     metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
 
@@ -157,15 +162,14 @@ if df is not None and not df_filtered.empty:
     # Visualization
     st.subheader("📊 Performance Insights")
 
-    if len(df_filtered["Date"].unique()) == 1:
-        category_order = [df_filtered["Date"].unique()[0]]
-    else:
-        category_order = df_filtered["Date"].unique().tolist()
+    # Color Code by Primary Subspecialty
+    category_order = df_filtered["Date"].unique().tolist()
 
     # Turnaround Time Trends
     if "Turnaround Time" in df_filtered.columns:
-        fig1 = px.line(df_filtered, x="Date", y="Turnaround Time", color="Provider",
+        fig1 = px.line(df_filtered, x="Date", y="Turnaround Time", color="Primary Subspecialty",
                        title="Turnaround Time Trends (Minutes)", markers=True,
+                       hover_data=["Provider", "Employment Type"],
                        category_orders={"Date": category_order})
         st.plotly_chart(fig1, use_container_width=True)
 
