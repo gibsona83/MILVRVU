@@ -11,30 +11,43 @@ with st.sidebar:
     st.header("Upload RVU File")
     uploaded_file = st.file_uploader("Drag and drop file here", type=["xlsx"])
 
-def load_data(file):
-    """Loads data from an uploaded Excel file."""
+# Load the MILV Roster (Employment Type & Subspecialty)
+@st.cache_data
+def load_roster():
+    """Loads the MILV Roster to get Employment Type and Primary Subspecialty."""
+    roster_path = "/mnt/data/MILVRoster.csv"
     try:
-        return pd.read_excel(file)
+        roster_df = pd.read_csv(roster_path)
+        
+        # Clean up employment type formatting
+        roster_df["Employment Type"] = roster_df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
+        
+        return roster_df
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"Error loading MILV Roster: {e}")
         return None
 
-def preprocess_data(df):
-    """Preprocesses the dataset: converts dates, cleans employment types, and removes NaNs."""
+# Load and preprocess data
+def load_data(file):
+    """Loads data from an uploaded Excel file and merges with MILV Roster."""
     try:
+        df = pd.read_excel(file)
+        
+        # Convert 'Date' column to datetime
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         df['Turnaround Time'] = pd.to_numeric(df['Turnaround Time'], errors='coerce')
-
-        # Exclude rows where 'Employment Type' is NaN
+        
+        # Load and merge MILV Roster
+        roster_df = load_roster()
+        if roster_df is not None:
+            df = df.merge(roster_df, on="Provider", how="left")  # Merge based on Provider
+            
+        # Remove NaN values in critical fields
         df.dropna(subset=['Date', 'Turnaround Time'], inplace=True)
-
-        # Standardize 'Employment Type': Remove anything in square brackets
-        if 'Employment Type' in df.columns:
-            df['Employment Type'] = df['Employment Type'].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
 
         return df
     except Exception as e:
-        st.error(f"Error during data preprocessing: {e}")
+        st.error(f"Error loading data: {e}")
         return None
 
 def filter_data(df, date_range, providers, employment_type, subspecialty):
@@ -57,7 +70,7 @@ def plot_bar_chart(df, x_col, y_col, title, color_col=None):
     """Generates a bar chart if the required columns are present."""
     if y_col in df.columns:
         fig = px.bar(df, x=x_col, y=y_col, color=color_col, title=title)
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning(f"'{y_col}' column is missing in the data.")
 
@@ -65,38 +78,34 @@ if uploaded_file:
     df = load_data(uploaded_file)
     
     if df is not None:
-        st.success(f"✅ Loaded {len(df)} records")
-        df = preprocess_data(df)
+        st.success(f"✅ Loaded {len(df)} records with Employment Type & Subspecialty")
+        
+        # Sidebar filters
+        min_date, max_date = df['Date'].min(), df['Date'].max()
+        date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
 
-        if df is not None:
-            st.success(f"✅ Preprocessed {len(df)} records")
+        provider_options = ["ALL"] + sorted(df["Provider"].dropna().unique().tolist())
+        selected_providers = st.sidebar.multiselect("Select Provider(s)", provider_options, default=["ALL"])
 
-            # Sidebar filters
-            min_date, max_date = df['Date'].min(), df['Date'].max()
-            date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+        employment_options = ["ALL"] + sorted(df["Employment Type"].dropna().unique().tolist())
+        selected_employment = st.sidebar.multiselect("Select Employment Type", employment_options, default=["ALL"])
 
-            provider_options = ["ALL"] + sorted(df["Provider"].dropna().unique().tolist())
-            selected_providers = st.sidebar.multiselect("Select Provider(s)", provider_options, default=["ALL"])
+        subspecialty_options = ["ALL"] + sorted(df["Primary Subspecialty"].dropna().unique().tolist())
+        selected_subspecialty = st.sidebar.multiselect("Select Primary Subspecialty", subspecialty_options, default=["ALL"])
 
-            employment_options = ["ALL"] + sorted(df["Employment Type"].dropna().unique().tolist())
-            selected_employment = st.sidebar.multiselect("Select Employment Type", employment_options, default=["ALL"])
+        # Apply filters
+        df_filtered = filter_data(df, date_range, selected_providers, selected_employment, selected_subspecialty)
+        st.success(f"✅ Records after filtering: {len(df_filtered)}")
 
-            subspecialty_options = ["ALL"] + sorted(df["Primary Subspecialty"].dropna().unique().tolist())
-            selected_subspecialty = st.sidebar.multiselect("Select Primary Subspecialty", subspecialty_options, default=["ALL"])
+        # Display data
+        st.write("Filtered Data:", df_filtered.head())
 
-            # Apply filters
-            df_filtered = filter_data(df, date_range, selected_providers, selected_employment, selected_subspecialty)
-            st.success(f"✅ Records after filtering: {len(df_filtered)}")
-
-            # Display data
-            st.write("Filtered Data:", df_filtered.head())
-
-            if df_filtered.empty:
-                st.warning("No data available for the selected filters.")
-            else:
-                # Visualizations
-                plot_bar_chart(df_filtered, "Provider", "Turnaround Time", "Turnaround Time by Provider", "Primary Subspecialty")
-                plot_bar_chart(df_filtered, "Provider", "Procedures per Half-Day", "Procedures per Half-Day by Provider", "Primary Subspecialty")
-                plot_bar_chart(df_filtered, "Provider", "Points per Half-Day", "Points per Half-Day by Provider", "Primary Subspecialty")
+        if df_filtered.empty:
+            st.warning("No data available for the selected filters.")
+        else:
+            # Visualizations
+            plot_bar_chart(df_filtered, "Provider", "Turnaround Time", "Turnaround Time by Provider", "Primary Subspecialty")
+            plot_bar_chart(df_filtered, "Provider", "Procedures per Half-Day", "Procedures per Half-Day by Provider", "Primary Subspecialty")
+            plot_bar_chart(df_filtered, "Provider", "Points per Half-Day", "Points per Half-Day by Provider", "Primary Subspecialty")
 else:
     st.info("Please upload an Excel file to proceed.")
