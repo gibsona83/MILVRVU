@@ -8,6 +8,7 @@ LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
 
 # File path for storing the latest uploaded file
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
+ROSTER_FILE_PATH = "MILVRoster.csv"
 
 # Function to load the last uploaded file
 def load_last_uploaded_file():
@@ -28,18 +29,25 @@ def convert_turnaround(time_value):
     except:
         return None  # Return None for invalid values
 
+# Load MILV Roster Data
+def load_roster():
+    if os.path.exists(ROSTER_FILE_PATH):
+        return pd.read_csv(ROSTER_FILE_PATH)
+    return None
+
 # Set Streamlit theme settings
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Sidebar - Logo & Filters
 with st.sidebar:
-    # Display MILV Logo from GitHub
     st.image(LOGO_URL, use_container_width=True)
+
+    # Load roster data
+    roster_df = load_roster()
 
     # Load existing file
     df = load_last_uploaded_file()
 
-    # Rename columns before filtering
     if df is not None:
         df = df.rename(columns={
             "Author": "Provider",
@@ -50,11 +58,15 @@ with st.sidebar:
             "Procedure/half": "Procedures per Half-Day"
         })
 
+    # Merge Roster Data with RVU Data
+    if df is not None and roster_df is not None:
+        df = df.merge(roster_df, on="Provider", how="left")
+
     # Sidebar - Date Selection
     st.subheader("📅 Select Date or Range")
 
     if df is not None and "Date" in df.columns:
-        df["Date"] = pd.to_datetime(df["Date"]).dt.date  # 🔥 Remove timestamps
+        df["Date"] = pd.to_datetime(df["Date"]).dt.date
         latest_date = df["Date"].max()
 
         date_filter_option = st.radio("Select Date Filter:", ["Single Date", "Date Range"], horizontal=True)
@@ -67,23 +79,42 @@ with st.sidebar:
             end_date = st.date_input("End Date", latest_date)
             df_filtered = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
 
-        # Ensure 'Provider' column exists before filtering
+        # Provider Filter
         if "Provider" in df_filtered.columns:
             st.subheader("👨‍⚕️ Providers")
             provider_options = df_filtered["Provider"].dropna().unique()
-            provider_options = ["ALL"] + list(provider_options)  # Add "ALL" option
+            provider_options = ["ALL"] + list(provider_options)
 
-            selected_providers = st.multiselect(
-                "Select Provider(s)", provider_options, default=["ALL"]
-            )
+            selected_providers = st.multiselect("Select Provider(s)", provider_options, default=["ALL"])
 
-            # Apply provider filter if not "ALL"
             if "ALL" not in selected_providers:
                 df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
         else:
             st.warning("⚠️ No 'Provider' column found in the dataset.")
 
-    # Move Upload File Section to the Bottom If File is Loaded
+        # Employment Type Filter
+        if "Employment Type" in df_filtered.columns:
+            st.subheader("💼 Employment Type")
+            employment_options = df_filtered["Employment Type"].dropna().unique()
+            employment_options = ["ALL"] + list(employment_options)
+
+            selected_employment = st.multiselect("Select Employment Type", employment_options, default=["ALL"])
+
+            if "ALL" not in selected_employment:
+                df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
+
+        # Primary Subspecialty Filter
+        if "Primary Subspecialty" in df_filtered.columns:
+            st.subheader("🔬 Primary Subspecialty")
+            subspecialty_options = df_filtered["Primary Subspecialty"].dropna().unique()
+            subspecialty_options = ["ALL"] + list(subspecialty_options)
+
+            selected_subspecialties = st.multiselect("Select Primary Subspecialty", subspecialty_options, default=["ALL"])
+
+            if "ALL" not in selected_subspecialties:
+                df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
+
+    # Upload File Section
     st.markdown("---")
     st.subheader("📂 Upload Daily RVU File")
     uploaded_file = st.file_uploader("", type=["xlsx"])
@@ -92,24 +123,22 @@ with st.sidebar:
 if uploaded_file:
     df = save_uploaded_file(uploaded_file)
     st.sidebar.success("✅ File uploaded successfully!")
-    df["Date"] = pd.to_datetime(df["Date"]).dt.date  # 🔥 Remove timestamps
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
     latest_date = df["Date"].max()
 
+# Ensure valid data for visualization
 if df is not None and not df_filtered.empty:
-    # Convert Turnaround Time safely
     if "Turnaround Time" in df_filtered.columns:
         df_filtered["Turnaround Time"] = df_filtered["Turnaround Time"].astype(str).apply(convert_turnaround)
-        df_filtered = df_filtered.dropna(subset=["Turnaround Time"])  # Remove rows where conversion failed
+        df_filtered = df_filtered.dropna(subset=["Turnaround Time"])
 
-    # Drop unnecessary columns
     df_filtered = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col], errors="ignore")
 
-    # Ensure Date is displayed correctly for charts
-    df_filtered["Date"] = df_filtered["Date"].astype(str)  # 🔥 Ensure only dates are shown (not timestamps)
+    df_filtered["Date"] = df_filtered["Date"].astype(str)
 
     # Display Summary Statistics
     st.title("📊 MILV Daily Productivity Dashboard")
-    st.subheader(f"📋 Productivity Summary")
+    st.subheader("📋 Productivity Summary")
 
     metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
 
@@ -125,37 +154,22 @@ if df is not None and not df_filtered.empty:
         avg_points = df_filtered["Points per Half-Day"].mean()
         metrics_col3.metric("📈 Avg Points per Half Day", f"{avg_points:.2f}")
 
-    # Visualization Section
+    # Visualization
     st.subheader("📊 Performance Insights")
 
-    # Dynamically adjust chart size based on date selection
     if len(df_filtered["Date"].unique()) == 1:
         category_order = [df_filtered["Date"].unique()[0]]
     else:
         category_order = df_filtered["Date"].unique().tolist()
 
-    # Plot Turnaround Time Trends
+    # Turnaround Time Trends
     if "Turnaround Time" in df_filtered.columns:
         fig1 = px.line(df_filtered, x="Date", y="Turnaround Time", color="Provider",
                        title="Turnaround Time Trends (Minutes)", markers=True,
                        category_orders={"Date": category_order})
         st.plotly_chart(fig1, use_container_width=True)
 
-    # Plot Procedures per Half Day
-    if "Procedures per Half-Day" in df_filtered.columns:
-        fig2 = px.bar(df_filtered, x="Date", y="Procedures per Half-Day", color="Provider",
-                      title="Procedures per Half Day by Provider", barmode="group",
-                      category_orders={"Date": category_order})
-        st.plotly_chart(fig2, use_container_width=True)
-
-    # Plot Points per Half Day
-    if "Points per Half-Day" in df_filtered.columns:
-        fig3 = px.line(df_filtered, x="Date", y="Points per Half-Day", color="Provider",
-                       title="Points per Half Day Over Time", markers=True,
-                       category_orders={"Date": category_order})
-        st.plotly_chart(fig3, use_container_width=True)
-
-    # Display filtered data in a table
+    # Display filtered data
     st.subheader("📋 Detailed Data")
     st.dataframe(df_filtered, use_container_width=True)
 
