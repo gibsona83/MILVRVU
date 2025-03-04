@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
-import re  # For regex filtering of employment type
+import re
 
 # Load MILV logo from GitHub
 LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
@@ -42,12 +42,14 @@ def clean_employment_type(value):
         return None
     return re.sub(r"\s*\[.*?\]", "", str(value)).strip()
 
-# Function to format provider names as "First Last"
+# Function to format provider names as "Last, First"
 def format_provider_name(name):
     if pd.isna(name) or not isinstance(name, str):
         return None
     parts = name.split()
-    return " ".join([part.capitalize() for part in parts])  # Capitalize each part
+    if len(parts) > 1:
+        return f"{parts[-1]}, {' '.join(parts[:-1])}"
+    return name  # Return as-is if only one name part exists
 
 # Set Streamlit theme settings
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -87,12 +89,15 @@ if df is not None and not df.empty:
     # Ensure 'Date' column is formatted correctly
     df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
+    # Format Provider names as "Last, First"
+    df["Provider"] = df["Provider"].apply(format_provider_name)
+
     # Load latest data
     latest_date = df["Date"].max()
     df_filtered = df[df["Date"] == latest_date].copy()
 
     # Drop NaN values before filtering
-    df_filtered.dropna(subset=["Employment Type", "Primary Subspecialty"], inplace=True)
+    df_filtered.dropna(subset=["Employment Type", "Primary Subspecialty", "Turnaround Time"], inplace=True)
 
     # **Sidebar Filters**
     with st.sidebar:
@@ -132,9 +137,12 @@ if df is not None and not df.empty:
     if df_filtered.empty:
         st.warning("⚠️ No data available for the selected filters.")
     else:
-        # **Turnaround Time - Box Plot (With Provider Hover)**
-        fig1 = px.box(df_filtered, y="Turnaround Time", color="Primary Subspecialty",
-                      hover_data=["Provider"], title="Turnaround Time Distribution by Subspecialty")
+        # **Turnaround Time - Grouped Bar Chart (Subspecialty & Providers)**
+        df_filtered.sort_values(by="Turnaround Time", ascending=False, inplace=True)
+        fig1 = px.bar(df_filtered, x="Provider", y="Turnaround Time", color="Primary Subspecialty",
+                      title="Turnaround Time by Provider within Subspecialty",
+                      hover_data=["Provider", "Employment Type"],
+                      barmode="group")
         st.plotly_chart(fig1, use_container_width=True)
 
         # **Procedures per Half-Day - Sorted Bar Chart**
