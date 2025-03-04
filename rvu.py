@@ -7,12 +7,9 @@ import os
 # Set Streamlit page configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# GitHub File URLs
-GITHUB_USERNAME = "gibsona83"
-GITHUB_REPO = "MILVRVU"
-GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{GITHUB_REPO}/main/"
-GITHUB_IMAGE_URL = GITHUB_BASE_URL + "milv.png"
-GITHUB_ROSTER_URL = GITHUB_BASE_URL + "MILVRoster.csv"
+# Correct RAW URLs for downloading files
+GITHUB_IMAGE_URL = "https://raw.githubusercontent.com/gibsona83/MILVRVU/main/milv.png"
+GITHUB_ROSTER_URL = "https://raw.githubusercontent.com/gibsona83/MILVRVU/main/MILVRoster.csv"
 
 # Local File Paths
 IMAGE_PATH = "/mnt/data/milv.png"
@@ -25,16 +22,21 @@ def download_file(url, save_path):
         if response.status_code == 200:
             with open(save_path, "wb") as f:
                 f.write(response.content)
+            st.success(f"✅ Successfully downloaded {os.path.basename(save_path)}")
             return True
         else:
-            st.error(f"❌ Failed to download {os.path.basename(save_path)} (HTTP {response.status_code}).")
+            st.error(f"❌ Failed to download {os.path.basename(save_path)} (HTTP {response.status_code})")
             return False
     except Exception as e:
         st.error(f"❌ Error downloading {os.path.basename(save_path)}: {e}")
         return False
 
 # Ensure `milv.png` is available before using it
-if download_file(GITHUB_IMAGE_URL, IMAGE_PATH):
+if not os.path.exists(IMAGE_PATH):
+    st.info("📥 Downloading `milv.png` from GitHub...")
+    download_file(GITHUB_IMAGE_URL, IMAGE_PATH)
+
+if os.path.exists(IMAGE_PATH):
     st.image(IMAGE_PATH, width=250)
 else:
     st.warning("⚠️ Logo image not found. Using default styling.")
@@ -50,7 +52,7 @@ with st.sidebar:
 def load_roster():
     """Loads the MILV Roster from GitHub and processes it."""
     if not os.path.exists(ROSTER_PATH):
-        st.info("📥 Downloading MILVRoster.csv from GitHub...")
+        st.info("📥 Downloading `MILVRoster.csv` from GitHub...")
         if not download_file(GITHUB_ROSTER_URL, ROSTER_PATH):
             return None
 
