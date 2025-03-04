@@ -36,12 +36,30 @@ def load_roster():
         return pd.read_csv(ROSTER_FILE_PATH)
     return None
 
-# Load Roster Data
-roster_df = load_roster()
+# Function to clean Employment Type (remove brackets and content inside)
+def clean_employment_type(value):
+    if pd.isna(value) or value == "":
+        return None
+    return re.sub(r"\s*\[.*?\]", "", str(value)).strip()
 
-# Sidebar - File Upload
+# Function to format provider names as "First Last"
+def format_provider_name(name):
+    if pd.isna(name) or not isinstance(name, str):
+        return None
+    parts = name.split()
+    return " ".join([part.capitalize() for part in parts])  # Capitalize each part
+
+# Set Streamlit theme settings
+st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
+
+# Sidebar - Logo & Filters
 with st.sidebar:
     st.image(LOGO_URL, use_container_width=True)
+
+    # Load Roster Data
+    roster_df = load_roster()
+
+    # Upload File Section
     st.markdown("---")
     st.subheader("📂 Upload Daily RVU File")
     uploaded_file = st.file_uploader("", type=["xlsx"])
@@ -73,23 +91,53 @@ if df is not None and not df.empty:
     latest_date = df["Date"].max()
     df_filtered = df[df["Date"] == latest_date].copy()
 
-    # Drop NaN values before plotting
-    df_filtered.dropna(subset=["Turnaround Time", "Primary Subspecialty"], inplace=True)
+    # Drop NaN values before filtering
+    df_filtered.dropna(subset=["Employment Type", "Primary Subspecialty"], inplace=True)
 
-    # Ensure Turnaround Time is numeric
-    df_filtered["Turnaround Time"] = df_filtered["Turnaround Time"].astype(str).apply(convert_turnaround)
-    df_filtered.dropna(subset=["Turnaround Time"], inplace=True)
+    # **Sidebar Filters**
+    with st.sidebar:
+        st.subheader("📅 Date Selection")
+        date_filter_option = st.radio("Select Date Filter:", ["Single Date", "Date Range"], horizontal=True)
+
+        if date_filter_option == "Single Date":
+            selected_date = st.date_input("Select Date", latest_date)
+            df_filtered = df[df["Date"] == selected_date].copy()
+        else:
+            start_date = st.date_input("Start Date", df["Date"].min())
+            end_date = st.date_input("End Date", latest_date)
+            df_filtered = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)].copy()
+
+        # Provider Filter
+        st.subheader("👨‍⚕️ Providers")
+        provider_options = sorted(df_filtered["Provider"].dropna().unique())
+        selected_providers = st.multiselect("Select Provider(s)", ["ALL"] + provider_options, default=["ALL"])
+        if "ALL" not in selected_providers:
+            df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
+
+        # Employment Type Filter
+        st.subheader("💼 Employment Type")
+        employment_options = sorted(df_filtered["Employment Type"].dropna().unique())
+        selected_employment = st.multiselect("Select Employment Type", ["ALL"] + employment_options, default=["ALL"])
+        if "ALL" not in selected_employment:
+            df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
+
+        # Primary Subspecialty Filter
+        st.subheader("🔬 Primary Subspecialty")
+        subspecialty_options = sorted(df_filtered["Primary Subspecialty"].dropna().unique())
+        selected_subspecialties = st.multiselect("Select Primary Subspecialty", ["ALL"] + subspecialty_options, default=["ALL"])
+        if "ALL" not in selected_subspecialties:
+            df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
 
     # Ensure at least one row exists before plotting
     if df_filtered.empty:
-        st.warning("⚠️ No data available for the selected date.")
+        st.warning("⚠️ No data available for the selected filters.")
     else:
-        # **Turnaround Time - Box Plot**
+        # **Turnaround Time - Box Plot (With Provider Hover)**
         fig1 = px.box(df_filtered, y="Turnaround Time", color="Primary Subspecialty",
-                      title="Turnaround Time Distribution by Subspecialty")
+                      hover_data=["Provider"], title="Turnaround Time Distribution by Subspecialty")
         st.plotly_chart(fig1, use_container_width=True)
 
-        # **Procedures per Half-Day - Bar Chart**
+        # **Procedures per Half-Day - Sorted Bar Chart**
         df_filtered.sort_values(by="Procedures per Half-Day", ascending=False, inplace=True)
         fig2 = px.bar(df_filtered, x="Provider", y="Procedures per Half-Day", color="Primary Subspecialty",
                       title="Procedures per Half Day by Provider")
