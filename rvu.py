@@ -38,7 +38,18 @@ def load_roster():
 
 # Function to clean Employment Type (remove brackets and content inside)
 def clean_employment_type(value):
+    if pd.isna(value) or value == "":
+        return None
     return re.sub(r"\s*\[.*?\]", "", str(value)).strip()
+
+# Function to format provider names as "Last, First"
+def format_provider_name(name):
+    if pd.isna(name) or not isinstance(name, str):
+        return None
+    parts = name.split()
+    if len(parts) > 1:
+        return f"{parts[-1]}, {' '.join(parts[:-1])}"
+    return name  # Return name as-is if only one part exists
 
 # Function to handle sidebar selection logic (removing "ALL" if another selection is made)
 def single_selection_logic(selection_list, all_label="ALL"):
@@ -87,6 +98,9 @@ with st.sidebar:
             if "Employment Type" in df.columns:
                 df["Employment Type"] = df["Employment Type"].apply(clean_employment_type)
 
+        # **Fix Provider Name Formatting**
+        df["Provider"] = df["Provider"].apply(format_provider_name)
+
         # Ensure 'Date' column is formatted correctly
         df["Date"] = pd.to_datetime(df["Date"]).dt.date  # ✅ Remove timestamps
 
@@ -109,7 +123,7 @@ with st.sidebar:
         # Provider Filter
         if "Provider" in df_filtered.columns:
             st.subheader("👨‍⚕️ Providers")
-            provider_options = ["ALL"] + list(df_filtered["Provider"].dropna().unique())
+            provider_options = ["ALL"] + sorted(df_filtered["Provider"].dropna().unique())
             selected_providers = st.multiselect("Select Provider(s)", provider_options, default=["ALL"])
             selected_providers = single_selection_logic(selected_providers)
 
@@ -156,20 +170,6 @@ if df_filtered is not None and not df_filtered.empty:
     # Display Summary Statistics
     st.title("📊 MILV Daily Productivity Dashboard")
     st.subheader(f"📋 Productivity Summary for {latest_date}")
-
-    metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
-
-    if "Turnaround Time" in df_filtered.columns:
-        avg_turnaround = df_filtered["Turnaround Time"].mean()
-        metrics_col1.metric("⏳ Avg Turnaround Time (mins)", f"{avg_turnaround:.2f}")
-
-    if "Procedures per Half-Day" in df_filtered.columns:
-        avg_procs = df_filtered["Procedures per Half-Day"].mean()
-        metrics_col2.metric("🔬 Avg Procedures per Half Day", f"{avg_procs:.2f}")
-
-    if "Points per Half-Day" in df_filtered.columns:
-        avg_points = df_filtered["Points per Half-Day"].mean()
-        metrics_col3.metric("📈 Avg Points per Half Day", f"{avg_points:.2f}")
 
     # **Visualizations**
     st.subheader("📊 Performance Insights")
