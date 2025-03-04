@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import os
 import plotly.express as px
+from PIL import Image
 
 # File path for storing the latest uploaded file
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
-LOGO_PATH = "/mnt/data/milv.png"  # Path to the uploaded MILV logo
+LOGO_PATH = "/mnt/data/milv.png"  # Ensure correct path
 
 # Function to load the last uploaded file
 def load_last_uploaded_file():
@@ -31,8 +32,12 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Sidebar - Logo & Filters
 with st.sidebar:
-    # Display MILV Logo
-    st.image(LOGO_PATH, use_column_width=True)
+    # Display MILV Logo if available
+    if os.path.exists(LOGO_PATH):
+        image = Image.open(LOGO_PATH)
+        st.image(image, use_container_width=True)
+    else:
+        st.warning("🔴 MILV Logo Not Found - Please upload the logo.")
 
     # File Upload Handling
     st.subheader("📂 Upload Data")
