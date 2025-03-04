@@ -12,11 +12,11 @@ GITHUB_IMAGE_URL = "https://raw.githubusercontent.com/gibsona83/MILVRVU/main/mil
 GITHUB_ROSTER_URL = "https://raw.githubusercontent.com/gibsona83/MILVRVU/main/MILVRoster.csv"
 
 def fetch_csv_from_github(url):
-    """Fetch CSV file directly from GitHub without saving locally."""
+    """Fetch CSV file directly from GitHub and handle encoding issues."""
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
-            return pd.read_csv(io.StringIO(response.text))
+            return pd.read_csv(io.StringIO(response.content.decode('utf-8')), encoding='utf-8')
         else:
             st.error(f"❌ Failed to fetch file from {url} (HTTP {response.status_code})")
             return None
@@ -46,14 +46,22 @@ def load_roster():
     """Loads MILV Roster directly from GitHub without local storage."""
     df = fetch_csv_from_github(GITHUB_ROSTER_URL)
     if df is not None:
-        # Clean up Employment Type formatting
-        df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
-        df["Employment Type"].fillna("Unknown", inplace=True)
+        try:
+            # Ensure column names are clean
+            df.columns = df.columns.str.strip()
 
-        # Assign "NON MILV" if Primary Subspecialty is missing
-        df["Primary Subspecialty"].fillna("NON MILV", inplace=True)
+            # Clean up Employment Type formatting
+            df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
+            df["Employment Type"].fillna("Unknown", inplace=True)
 
-    return df
+            # Assign "NON MILV" if Primary Subspecialty is missing
+            df["Primary Subspecialty"].fillna("NON MILV", inplace=True)
+
+            return df
+        except Exception as e:
+            st.error(f"❌ Error processing MILV Roster: {e}")
+            return None
+    return None
 
 def convert_turnaround(time_value):
     """Converts turnaround time from HH:MM:SS or float to minutes."""
