@@ -36,6 +36,9 @@ def convert_turnaround(time_value):
 # Set Streamlit theme settings
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
+# **Title Always Shows**
+st.title("📊 MILV Daily Productivity")
+
 # Sidebar - Logo & Filters
 with st.sidebar:
     # Display MILV Logo from GitHub
@@ -118,6 +121,9 @@ if df is not None and not df.empty:
     # Debugging output: Check data after filtering
     st.write(f"✅ Records after filtering: {len(df_filtered)}")
 
+# **Title Appears Even When No Data Is Available**
+st.subheader(f"📋 Productivity Summary: {date_selection}")
+
 # Ensure `df_filtered` is not empty before rendering charts
 if df_filtered.empty:
     st.warning("⚠️ No data available after filtering. Try adjusting the filters.")
@@ -127,20 +133,38 @@ else:
     avg_procedures = df_filtered["Procedures per Half-Day"].mean() if not df_filtered["Procedures per Half-Day"].isna().all() else 0
     avg_points = df_filtered["Points per Half-Day"].mean() if not df_filtered["Points per Half-Day"].isna().all() else 0
 
-    # **Display Dashboard Title & Summary**
-    st.title("📊 MILV Daily Productivity")
-    st.subheader(f"📋 Productivity Summary: {date_selection}")
-
+    # **Display Summary Metrics**
     col1, col2, col3 = st.columns(3)
     col1.metric("Avg Turnaround Time (mins)", f"{avg_turnaround:.2f}")
     col2.metric("Avg Procedures per Half-Day", f"{avg_procedures:.2f}")
     col3.metric("Avg Points per Half-Day", f"{avg_points:.2f}")
 
     # **Turnaround Time - Sorted Descending**
-    tat_chart = px.bar(
-        df_filtered.sort_values("Turnaround Time", ascending=False),
-        x="Provider", y="Turnaround Time", color="Primary Subspecialty",
-        title="Turnaround Time by Provider within Subspecialty",
+    if not df_filtered["Turnaround Time"].isna().all():
+        tat_chart = px.bar(
+            df_filtered.sort_values("Turnaround Time", ascending=False),
+            x="Provider", y="Turnaround Time", color="Primary Subspecialty",
+            title="Turnaround Time by Provider within Subspecialty",
+            hover_data=["Provider"]
+        )
+        st.plotly_chart(tat_chart, use_container_width=True)
+    else:
+        st.warning("No valid Turnaround Time data available.")
+
+    # **Procedures per Half-Day - Sorted Ascending**
+    proc_chart = px.bar(
+        df_filtered.sort_values("Procedures per Half-Day", ascending=True),
+        x="Provider", y="Procedures per Half-Day", color="Primary Subspecialty",
+        title="Procedures per Half Day by Provider",
         hover_data=["Provider"]
     )
-    st.plotly_chart(tat_chart, use_container_width=True)
+    st.plotly_chart(proc_chart, use_container_width=True)
+
+    # **Points per Half-Day - Sorted Ascending**
+    points_chart = px.bar(
+        df_filtered.sort_values("Points per Half-Day", ascending=True),
+        x="Provider", y="Points per Half-Day", color="Primary Subspecialty",
+        title="Points per Half Day by Provider",
+        hover_data=["Provider"]
+    )
+    st.plotly_chart(points_chart, use_container_width=True)
