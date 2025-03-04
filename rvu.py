@@ -18,9 +18,8 @@ GITHUB_ROSTER_URL = GITHUB_BASE_URL + "MILVRoster.csv"
 IMAGE_PATH = "/mnt/data/milv.png"
 ROSTER_PATH = "/mnt/data/MILVRoster.csv"
 
-# Function to download files from GitHub if missing
 def download_file(url, save_path):
-    """Downloads a file from GitHub and saves it locally if not already available."""
+    """Downloads a file from GitHub and ensures it's saved locally."""
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
@@ -28,13 +27,13 @@ def download_file(url, save_path):
                 f.write(response.content)
             return True
         else:
-            st.warning(f"⚠️ Failed to download {os.path.basename(save_path)} (HTTP {response.status_code}).")
+            st.error(f"❌ Failed to download {os.path.basename(save_path)} (HTTP {response.status_code}).")
             return False
     except Exception as e:
-        st.error(f"Error downloading {os.path.basename(save_path)}: {e}")
+        st.error(f"❌ Error downloading {os.path.basename(save_path)}: {e}")
         return False
 
-# Ensure image is available
+# Ensure `milv.png` is available before using it
 if download_file(GITHUB_IMAGE_URL, IMAGE_PATH):
     st.image(IMAGE_PATH, width=250)
 else:
@@ -50,22 +49,25 @@ with st.sidebar:
 @st.cache_data
 def load_roster():
     """Loads the MILV Roster from GitHub and processes it."""
-    if download_file(GITHUB_ROSTER_URL, ROSTER_PATH):
-        try:
-            df = pd.read_csv(ROSTER_PATH)
-
-            # Clean up Employment Type formatting
-            df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
-            df["Employment Type"].fillna("Unknown", inplace=True)
-
-            # Assign "NON MILV" if Primary Subspecialty is missing
-            df["Primary Subspecialty"].fillna("NON MILV", inplace=True)
-
-            return df
-        except Exception as e:
-            st.error(f"Error loading MILV Roster: {e}")
+    if not os.path.exists(ROSTER_PATH):
+        st.info("📥 Downloading MILVRoster.csv from GitHub...")
+        if not download_file(GITHUB_ROSTER_URL, ROSTER_PATH):
             return None
-    return None
+
+    try:
+        df = pd.read_csv(ROSTER_PATH)
+
+        # Clean up Employment Type formatting
+        df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
+        df["Employment Type"].fillna("Unknown", inplace=True)
+
+        # Assign "NON MILV" if Primary Subspecialty is missing
+        df["Primary Subspecialty"].fillna("NON MILV", inplace=True)
+
+        return df
+    except Exception as e:
+        st.error(f"Error loading MILV Roster: {e}")
+        return None
 
 def convert_turnaround(time_value):
     """Converts turnaround time from HH:MM:SS or float to minutes."""
