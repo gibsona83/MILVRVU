@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-import os
 import plotly.express as px
-from PIL import Image
 
-# File paths
+# Load MILV logo from GitHub
+LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
+
+# File path for storing the latest uploaded file
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
-LOGO_PATH = "/mnt/data/milv.png"
 
 # Function to load the last uploaded file
 def load_last_uploaded_file():
@@ -32,13 +32,8 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Sidebar - Logo & Filters
 with st.sidebar:
-    # Display MILV Logo (Fix: Load as bytes)
-    try:
-        with open(LOGO_PATH, "rb") as f:
-            image = Image.open(f)
-            st.image(image, use_container_width=True)
-    except:
-        st.warning("🔴 MILV Logo Not Found")
+    # Display MILV Logo from GitHub
+    st.image(LOGO_URL, use_container_width=True)
 
     # File Upload Handling
     st.subheader("📂 Upload Data")
@@ -80,7 +75,7 @@ if df is not None:
         with st.sidebar:
             st.subheader("📅 Select Date or Range")
 
-            date_filter_option = st.radio("Filter by:", ["Single Date", "Date Range"], horizontal=True)
+            date_filter_option = st.radio("Select Date Filter:", ["Single Date", "Date Range"], horizontal=True)
 
             if date_filter_option == "Single Date":
                 selected_date = st.date_input("Select Date", latest_date)
@@ -90,10 +85,14 @@ if df is not None:
                 end_date = st.date_input("End Date", latest_date)
                 df_filtered = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
 
-            # Multi-Select Provider Filtering (Dropdown Style)
+            # Multi-Select Provider Filtering with "ALL" Default
             st.subheader("👨‍⚕️ Providers")
             provider_options = df_filtered["Provider"].dropna().unique()
-            selected_providers = st.multiselect("Select Provider(s)", ["ALL"] + list(provider_options), default="ALL")
+            provider_options = ["ALL"] + list(provider_options)  # Add "ALL" option
+
+            selected_providers = st.multiselect(
+                "Select Provider(s)", provider_options, default=["ALL"]
+            )
 
         # Apply provider filter if not "ALL"
         if "ALL" not in selected_providers:
