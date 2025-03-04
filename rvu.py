@@ -17,7 +17,7 @@ def load_roster():
     roster_path = "/mnt/data/MILVRoster.csv"
     try:
         roster_df = pd.read_csv(roster_path)
-        
+
         # Clean up employment type formatting and remove NaN values
         roster_df["Employment Type"] = roster_df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
         roster_df["Employment Type"].fillna("Unknown", inplace=True)  # Ensure no NaN
@@ -26,6 +26,25 @@ def load_roster():
     except Exception as e:
         st.error(f"Error loading MILV Roster: {e}")
         return None
+
+def convert_turnaround(time_value):
+    """Converts turnaround time from HH:MM:SS or float to minutes."""
+    if pd.isna(time_value):  # Handle NaN values
+        return 0
+
+    if isinstance(time_value, float):  # Already a decimal format
+        return round(time_value * 60)  # Convert to minutes
+
+    if isinstance(time_value, str):  # Check for HH:MM:SS format
+        parts = time_value.split(":")
+        if len(parts) == 3:  # HH:MM:SS
+            try:
+                hours, minutes, seconds = map(int, parts)
+                return hours * 60 + minutes  # Convert to total minutes
+            except ValueError:
+                return 0  # Return 0 if conversion fails
+
+    return 0  # Default return value for unexpected formats
 
 def load_data(file):
     """Loads and processes the RVU Daily Master data."""
@@ -43,14 +62,8 @@ def load_data(file):
         # Convert 'Date' column to datetime
         rvu_df['Date'] = pd.to_datetime(rvu_df['Date'], errors='coerce').dt.date
 
-        # Convert Turnaround Time from HH:MM:SS to minutes
-        def convert_turnaround(time_str):
-            if isinstance(time_str, str):
-                parts = time_str.split(":")
-                return int(parts[0]) * 60 + int(parts[1])  # Convert to minutes
-            return 0
-
-        rvu_df["Turnaround Time"] = rvu_df["Turnaround Time"].astype(str).apply(convert_turnaround)
+        # Convert Turnaround Time to minutes
+        rvu_df["Turnaround Time"] = rvu_df["Turnaround Time"].apply(convert_turnaround)
 
         # Load and merge MILV Roster
         roster_df = load_roster()
@@ -107,7 +120,7 @@ if uploaded_file:
         provider_options = ["ALL"] + sorted(df["Provider"].dropna().unique().tolist())
         selected_providers = st.sidebar.multiselect("Select Provider(s)", provider_options, default=["ALL"])
 
-        employment_options = ["ALL"] + sorted(df["Employment Type"].dropna().unique().tolist())
+        employment_options = ["ALL"] + sorted(df["Employment Type"].unique().tolist())
         selected_employment = st.sidebar.multiselect("Select Employment Type", employment_options, default=["ALL"])
 
         subspecialty_options = ["ALL"] + sorted(df["Primary Subspecialty"].dropna().unique().tolist())
