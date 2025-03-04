@@ -139,7 +139,8 @@ if df is not None and not df_filtered.empty:
 
     df_filtered = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col], errors="ignore")
 
-    df_filtered["Date"] = df_filtered["Date"].astype(str)  # Ensure only date, no timestamps
+    # Ensure only dates, no timestamps
+    df_filtered["Date"] = df_filtered["Date"].astype(str)
 
     # Display Summary Statistics
     st.title("📊 MILV Daily Productivity Dashboard")
