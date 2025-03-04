@@ -7,9 +7,9 @@ import re  # For regex filtering of employment type
 # Load MILV logo from GitHub
 LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
 
-# File path for storing the latest uploaded file
+# File paths
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
-ROSTER_FILE_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/MILVRoster.csv"  # Load from GitHub
+ROSTER_FILE_PATH = "MILVRoster.csv"
 
 # Function to load the last uploaded file
 def load_last_uploaded_file():
@@ -30,14 +30,11 @@ def convert_turnaround(time_value):
     except:
         return None  # Return None for invalid values
 
-# Load MILV Roster Data from GitHub
-@st.cache_data
+# Load MILV Roster Data
 def load_roster():
-    try:
-        return pd.read_csv(ROSTER_FILE_URL)
-    except Exception as e:
-        st.warning(f"⚠️ Could not load MILVRoster.csv from GitHub: {e}")
-        return None
+    if os.path.exists(ROSTER_FILE_PATH):
+        return pd.read_csv(ROSTER_FILE_PATH)
+    return None
 
 # Function to clean Employment Type (remove brackets and content inside)
 def clean_employment_type(value):
@@ -71,8 +68,11 @@ with st.sidebar:
             "Procedure/half": "Procedures per Half-Day"
         })
 
-        # Merge Roster Data with RVU Data
+        # Merge Roster Data with RVU Data - **Case Insensitive Merge Fix**
         if roster_df is not None:
+            roster_df["Provider"] = roster_df["Provider"].str.strip().str.lower()
+            df["Provider"] = df["Provider"].str.strip().str.lower()
+
             df = df.merge(roster_df, on="Provider", how="left")
 
             # Clean Employment Type column
@@ -161,6 +161,12 @@ if df_filtered is not None and not df_filtered.empty:
     if "Points per Half-Day" in df_filtered.columns:
         avg_points = df_filtered["Points per Half-Day"].mean()
         metrics_col3.metric("📈 Avg Points per Half Day", f"{avg_points:.2f}")
+
+    # **Fix: Ensure Visualizations Render**
+    st.subheader("📊 Performance Insights")
+    fig = px.scatter(df_filtered, x="Date", y="Turnaround Time", color="Primary Subspecialty",
+                     title="Turnaround Time Trends", hover_data=["Provider", "Employment Type"])
+    st.plotly_chart(fig, use_container_width=True)
 
     # Display filtered data
     st.subheader("📋 Detailed Data")
