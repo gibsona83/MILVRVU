@@ -9,7 +9,7 @@ LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
 
 # File path for storing the latest uploaded file
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
-ROSTER_FILE_PATH = "MILVRoster.csv"
+ROSTER_FILE_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/MILVRoster.csv"  # Load from GitHub
 
 # Function to load the last uploaded file
 def load_last_uploaded_file():
@@ -30,11 +30,14 @@ def convert_turnaround(time_value):
     except:
         return None  # Return None for invalid values
 
-# Load MILV Roster Data
+# Load MILV Roster Data from GitHub
+@st.cache_data
 def load_roster():
-    if os.path.exists(ROSTER_FILE_PATH):
-        return pd.read_csv(ROSTER_FILE_PATH)
-    return None
+    try:
+        return pd.read_csv(ROSTER_FILE_URL)
+    except Exception as e:
+        st.warning(f"⚠️ Could not load MILVRoster.csv from GitHub: {e}")
+        return None
 
 # Function to clean Employment Type (remove brackets and content inside)
 def clean_employment_type(value):
@@ -50,8 +53,13 @@ with st.sidebar:
     # Load Roster Data
     roster_df = load_roster()
 
+    # Upload File Section
+    st.markdown("---")
+    st.subheader("📂 Upload Daily RVU File")
+    uploaded_file = st.file_uploader("", type=["xlsx"])
+
     # Load RVU Data
-    df = load_last_uploaded_file()
+    df = save_uploaded_file(uploaded_file) if uploaded_file else load_last_uploaded_file()
 
     if df is not None:
         df = df.rename(columns={
@@ -63,16 +71,15 @@ with st.sidebar:
             "Procedure/half": "Procedures per Half-Day"
         })
 
-    # Merge Roster Data with RVU Data
-    if df is not None and roster_df is not None:
-        df = df.merge(roster_df, on="Provider", how="left")
+        # Merge Roster Data with RVU Data
+        if roster_df is not None:
+            df = df.merge(roster_df, on="Provider", how="left")
 
-        # Clean Employment Type column
-        if "Employment Type" in df.columns:
-            df["Employment Type"] = df["Employment Type"].apply(clean_employment_type)
+            # Clean Employment Type column
+            if "Employment Type" in df.columns:
+                df["Employment Type"] = df["Employment Type"].apply(clean_employment_type)
 
-    # Ensure 'Date' column is formatted correctly
-    if df is not None and "Date" in df.columns:
+        # Ensure 'Date' column is formatted correctly
         df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
         # Load default data as the latest date in dataset
@@ -123,21 +130,11 @@ with st.sidebar:
 
             if "ALL" not in selected_subspecialties:
                 df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
-
-    # ✅ Fix: Upload File Section (Ensure uploaded_file is always defined)
-    st.markdown("---")
-    st.subheader("📂 Upload Daily RVU File")
-    uploaded_file = st.file_uploader("", type=["xlsx"])  # ✅ Fix added here
-
-# Load data from uploaded file
-if uploaded_file:
-    df = save_uploaded_file(uploaded_file)
-    st.sidebar.success("✅ File uploaded successfully!")
-    df["Date"] = pd.to_datetime(df["Date"]).dt.date
-    latest_date = df["Date"].max()
+    else:
+        df_filtered = None
 
 # Ensure valid data for visualization
-if df is not None and not df_filtered.empty:
+if df_filtered is not None and not df_filtered.empty:
     if "Turnaround Time" in df_filtered.columns:
         df_filtered["Turnaround Time"] = df_filtered["Turnaround Time"].astype(str).apply(convert_turnaround)
         df_filtered = df_filtered.dropna(subset=["Turnaround Time"])
@@ -170,4 +167,4 @@ if df is not None and not df_filtered.empty:
     st.dataframe(df_filtered, use_container_width=True)
 
 else:
-    st.warning("⚠️ No data available for the selected filters. Please adjust your selections.")
+    st.warning("⚠️ No data available. Please upload an RVU file or adjust filters.")
