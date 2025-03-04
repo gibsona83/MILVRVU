@@ -11,7 +11,6 @@ with st.sidebar:
     st.header("Upload RVU File")
     uploaded_file = st.file_uploader("Drag and drop file here", type=["xlsx"])
 
-# Load the MILV Roster (Employment Type & Subspecialty)
 @st.cache_data
 def load_roster():
     """Loads the MILV Roster to get Employment Type and Primary Subspecialty."""
@@ -27,25 +26,43 @@ def load_roster():
         st.error(f"Error loading MILV Roster: {e}")
         return None
 
-# Load and preprocess data
 def load_data(file):
-    """Loads data from an uploaded Excel file and merges with MILV Roster."""
+    """Loads and processes the RVU Daily Master data."""
     try:
-        df = pd.read_excel(file)
-        
+        rvu_df = pd.read_excel(file, sheet_name="powerscribe Data")
+
+        # Rename columns for consistency
+        rvu_df.rename(columns={
+            "Author": "Provider",
+            "Turnaround": "Turnaround Time",
+            "Procedure/half": "Procedures per Half-Day",
+            "Points/half day": "Points per Half-Day"
+        }, inplace=True)
+
         # Convert 'Date' column to datetime
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
-        df['Turnaround Time'] = pd.to_numeric(df['Turnaround Time'], errors='coerce')
-        
+        rvu_df['Date'] = pd.to_datetime(rvu_df['Date'], errors='coerce').dt.date
+
+        # Convert Turnaround Time from HH:MM:SS to minutes
+        def convert_turnaround(time_str):
+            if isinstance(time_str, str):
+                parts = time_str.split(":")
+                return int(parts[0]) * 60 + int(parts[1])  # Convert to minutes
+            return 0
+
+        rvu_df["Turnaround Time"] = rvu_df["Turnaround Time"].astype(str).apply(convert_turnaround)
+
         # Load and merge MILV Roster
         roster_df = load_roster()
         if roster_df is not None:
-            df = df.merge(roster_df, on="Provider", how="left")  # Merge based on Provider
-            
-        # Remove NaN values in critical fields
-        df.dropna(subset=['Date', 'Turnaround Time'], inplace=True)
+            rvu_df = rvu_df.merge(roster_df, on="Provider", how="left")
 
-        return df
+        # Fill missing Employment Type with "Unknown" instead of NaN
+        rvu_df["Employment Type"].fillna("Unknown", inplace=True)
+
+        # Drop NaNs in essential columns
+        rvu_df.dropna(subset=['Date', 'Turnaround Time'], inplace=True)
+
+        return rvu_df
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None
@@ -79,7 +96,7 @@ if uploaded_file:
     
     if df is not None:
         st.success(f"✅ Loaded {len(df)} records with Employment Type & Subspecialty")
-        
+
         # Sidebar filters
         min_date, max_date = df['Date'].min(), df['Date'].max()
         date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
@@ -87,7 +104,7 @@ if uploaded_file:
         provider_options = ["ALL"] + sorted(df["Provider"].dropna().unique().tolist())
         selected_providers = st.sidebar.multiselect("Select Provider(s)", provider_options, default=["ALL"])
 
-        employment_options = ["ALL"] + sorted(df["Employment Type"].dropna().unique().tolist())
+        employment_options = ["ALL"] + sorted(df["Employment Type"].unique().tolist())
         selected_employment = st.sidebar.multiselect("Select Employment Type", employment_options, default=["ALL"])
 
         subspecialty_options = ["ALL"] + sorted(df["Primary Subspecialty"].dropna().unique().tolist())
