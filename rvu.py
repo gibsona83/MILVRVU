@@ -15,13 +15,15 @@ def fetch_csv_from_github(url):
     """Fetch CSV file directly from GitHub and handle encoding issues."""
     try:
         response = requests.get(url, timeout=10)
+        
         if response.status_code == 200:
+            st.success("✅ Successfully fetched MILVRoster.csv from GitHub")
             return pd.read_csv(io.StringIO(response.content.decode('utf-8')), encoding='utf-8')
         else:
-            st.error(f"❌ Failed to fetch file from {url} (HTTP {response.status_code})")
+            st.error(f"❌ Failed to fetch MILVRoster.csv (HTTP {response.status_code})")
             return None
     except Exception as e:
-        st.error(f"❌ Error fetching file from {url}: {e}")
+        st.error(f"❌ Error fetching MILVRoster.csv: {e}")
         return None
 
 # Load `milv.png` directly from GitHub
@@ -44,11 +46,21 @@ with st.sidebar:
 @st.cache_data
 def load_roster():
     """Loads MILV Roster directly from GitHub without local storage."""
+    st.info("📥 Attempting to load MILVRoster.csv from GitHub...")
     df = fetch_csv_from_github(GITHUB_ROSTER_URL)
+    
     if df is not None:
         try:
             # Ensure column names are clean
             df.columns = df.columns.str.strip()
+            
+            # Debugging: Show column names to confirm correct structure
+            st.write("✅ Columns in MILVRoster.csv:", df.columns.tolist())
+
+            # Ensure the required columns exist
+            if "Employment Type" not in df.columns or "Primary Subspecialty" not in df.columns:
+                st.error("❌ MILVRoster.csv is missing required columns. Please check the file format.")
+                return None
 
             # Clean up Employment Type formatting
             df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
