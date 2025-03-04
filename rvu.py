@@ -42,14 +42,12 @@ def clean_employment_type(value):
         return None
     return re.sub(r"\s*\[.*?\]", "", str(value)).strip()
 
-# Function to format provider names as "Last, First"
+# Function to format provider names as "First Last"
 def format_provider_name(name):
     if pd.isna(name) or not isinstance(name, str):
         return None
     parts = name.split()
-    if len(parts) > 1:
-        return f"{parts[-1]}, {' '.join(parts[:-1])}"
-    return name
+    return " ".join([part.capitalize() for part in parts])  # Capitalize each part
 
 # Set Streamlit theme settings
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -90,7 +88,7 @@ with st.sidebar:
             if "Employment Type" in df.columns:
                 df["Employment Type"] = df["Employment Type"].apply(clean_employment_type)
 
-        # **Fix Provider Name Formatting**
+        # **Fix Provider Name Formatting to "First Last"**
         df["Provider"] = df["Provider"].apply(format_provider_name)
 
         # Ensure 'Date' column is formatted correctly
@@ -114,6 +112,34 @@ with st.sidebar:
             start_date = st.date_input("Start Date", df["Date"].min())
             end_date = st.date_input("End Date", latest_date)
             df_filtered = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)].copy()
+
+        # **Provider Filter**
+        if "Provider" in df_filtered.columns:
+            st.subheader("👨‍⚕️ Providers")
+            provider_options = sorted(df_filtered["Provider"].dropna().unique())
+            selected_providers = st.multiselect("Select Provider(s)", ["ALL"] + provider_options, default=["ALL"])
+            if "ALL" not in selected_providers:
+                df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
+
+        # **Employment Type Filter**
+        if "Employment Type" in df_filtered.columns:
+            valid_employment_types = df_filtered["Employment Type"].dropna().unique()
+            if len(valid_employment_types) > 0:
+                st.subheader("💼 Employment Type")
+                employment_options = sorted(valid_employment_types)
+                selected_employment = st.multiselect("Select Employment Type", ["ALL"] + list(employment_options), default=["ALL"])
+                if "ALL" not in selected_employment:
+                    df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
+
+        # **Primary Subspecialty Filter**
+        if "Primary Subspecialty" in df_filtered.columns:
+            valid_subspecialties = df_filtered["Primary Subspecialty"].dropna().unique()
+            if len(valid_subspecialties) > 0:
+                st.subheader("🔬 Primary Subspecialty")
+                subspecialty_options = sorted(valid_subspecialties)
+                selected_subspecialties = st.multiselect("Select Primary Subspecialty", ["ALL"] + list(subspecialty_options), default=["ALL"])
+                if "ALL" not in selected_subspecialties:
+                    df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
 
 # Ensure valid data for visualization
 if df_filtered is not None and not df_filtered.empty:
