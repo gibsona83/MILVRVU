@@ -40,6 +40,14 @@ def load_roster():
 def clean_employment_type(value):
     return re.sub(r"\s*\[.*?\]", "", str(value)).strip()
 
+# Function to handle sidebar selection logic (removing "ALL" if another selection is made)
+def single_selection_logic(selection_list, all_label="ALL"):
+    if all_label in selection_list and len(selection_list) > 1:
+        selection_list.remove(all_label)  # Remove "ALL" when another selection is made
+    elif not selection_list:  # If everything was removed, reset to "ALL"
+        selection_list.append(all_label)
+    return selection_list
+
 # Set Streamlit theme settings
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
@@ -80,7 +88,7 @@ with st.sidebar:
                 df["Employment Type"] = df["Employment Type"].apply(clean_employment_type)
 
         # Ensure 'Date' column is formatted correctly
-        df["Date"] = pd.to_datetime(df["Date"]).dt.date
+        df["Date"] = pd.to_datetime(df["Date"]).dt.date  # ✅ Remove timestamps
 
         # Load default data as the latest date in dataset
         latest_date = df["Date"].max()
@@ -101,35 +109,36 @@ with st.sidebar:
         # Provider Filter
         if "Provider" in df_filtered.columns:
             st.subheader("👨‍⚕️ Providers")
-            provider_options = df_filtered["Provider"].dropna().unique()
-            provider_options = ["ALL"] + list(provider_options)
-
+            provider_options = ["ALL"] + list(df_filtered["Provider"].dropna().unique())
             selected_providers = st.multiselect("Select Provider(s)", provider_options, default=["ALL"])
+            selected_providers = single_selection_logic(selected_providers)
 
             if "ALL" not in selected_providers:
                 df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
 
-        # Employment Type Filter
+        # **Employment Type Filter (Remove NaN/empty values)**
         if "Employment Type" in df_filtered.columns:
-            st.subheader("💼 Employment Type")
-            employment_options = df_filtered["Employment Type"].dropna().unique()
-            employment_options = ["ALL"] + list(employment_options)
+            valid_employment_types = df_filtered["Employment Type"].dropna().replace("", None).dropna().unique()
+            if valid_employment_types.size > 0:
+                st.subheader("💼 Employment Type")
+                employment_options = ["ALL"] + list(valid_employment_types)
+                selected_employment = st.multiselect("Select Employment Type", employment_options, default=["ALL"])
+                selected_employment = single_selection_logic(selected_employment)
 
-            selected_employment = st.multiselect("Select Employment Type", employment_options, default=["ALL"])
+                if "ALL" not in selected_employment:
+                    df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
 
-            if "ALL" not in selected_employment:
-                df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
-
-        # Primary Subspecialty Filter
+        # **Primary Subspecialty Filter (Remove NaN/empty values)**
         if "Primary Subspecialty" in df_filtered.columns:
-            st.subheader("🔬 Primary Subspecialty")
-            subspecialty_options = df_filtered["Primary Subspecialty"].dropna().unique()
-            subspecialty_options = ["ALL"] + list(subspecialty_options)
+            valid_subspecialties = df_filtered["Primary Subspecialty"].dropna().replace("", None).dropna().unique()
+            if valid_subspecialties.size > 0:
+                st.subheader("🔬 Primary Subspecialty")
+                subspecialty_options = ["ALL"] + list(valid_subspecialties)
+                selected_subspecialties = st.multiselect("Select Primary Subspecialty", subspecialty_options, default=["ALL"])
+                selected_subspecialties = single_selection_logic(selected_subspecialties)
 
-            selected_subspecialties = st.multiselect("Select Primary Subspecialty", subspecialty_options, default=["ALL"])
-
-            if "ALL" not in selected_subspecialties:
-                df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
+                if "ALL" not in selected_subspecialties:
+                    df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
     else:
         df_filtered = None
 
@@ -141,7 +150,7 @@ if df_filtered is not None and not df_filtered.empty:
 
     df_filtered = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col], errors="ignore")
 
-    # Ensure only dates, no timestamps
+    # ✅ Remove timestamps from visualizations
     df_filtered["Date"] = df_filtered["Date"].astype(str)
 
     # Display Summary Statistics
@@ -162,15 +171,8 @@ if df_filtered is not None and not df_filtered.empty:
         avg_points = df_filtered["Points per Half-Day"].mean()
         metrics_col3.metric("📈 Avg Points per Half Day", f"{avg_points:.2f}")
 
-    # **Fix: Ensure Visualizations Render**
+    # **Visualizations**
     st.subheader("📊 Performance Insights")
-    fig = px.scatter(df_filtered, x="Date", y="Turnaround Time", color="Primary Subspecialty",
-                     title="Turnaround Time Trends", hover_data=["Provider", "Employment Type"])
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Display filtered data
-    st.subheader("📋 Detailed Data")
-    st.dataframe(df_filtered, use_container_width=True)
-
-else:
-    st.warning("⚠️ No data available. Please upload an RVU file or adjust filters.")
+    st.plotly_chart(px.scatter(df_filtered, x="Date", y="Turnaround Time", color="Primary Subspecialty", title="Turnaround Time Trends"), use_container_width=True)
+    st.plotly_chart(px.bar(df_filtered, x="Date", y="Procedures per Half-Day", color="Primary Subspecialty", title="Procedures per Half Day by Provider", barmode="group"), use_container_width=True)
+    st.plotly_chart(px.line(df_filtered, x="Date", y="Points per Half-Day", color="Primary Subspecialty", title="Points per Half Day Over Time", markers=True), use_container_width=True)
