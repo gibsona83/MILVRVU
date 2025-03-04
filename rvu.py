@@ -29,7 +29,7 @@ def clean_employment_type(value):
 # Convert Turnaround Time safely to minutes
 def convert_turnaround(time_value):
     try:
-        return pd.to_timedelta(time_value).total_seconds() / 60  # Convert to minutes
+        return pd.to_numeric(time_value, errors="coerce")  # Convert to numeric, force errors to NaN
     except:
         return None  # Return None for invalid values
 
@@ -83,7 +83,7 @@ if df is not None and not df.empty:
         df = df.merge(roster_df, on="Provider", how="left")
 
     # Convert Turnaround Time to numeric
-    df["Turnaround Time"] = pd.to_numeric(df["Turnaround Time"], errors="coerce")
+    df["Turnaround Time"] = df["Turnaround Time"].apply(convert_turnaround)
 
     # Ensure 'Date' column is formatted correctly
     df["Date"] = pd.to_datetime(df["Date"]).dt.date
