@@ -5,6 +5,7 @@ import plotly.express as px
 
 # File path for storing the latest uploaded file
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
+LOGO_PATH = "/mnt/data/milv.png"  # Path to the uploaded MILV logo
 
 # Function to load the last uploaded file
 def load_last_uploaded_file():
@@ -18,19 +19,29 @@ def save_uploaded_file(uploaded_file):
         f.write(uploaded_file.getbuffer())
     return pd.read_excel(LAST_FILE_PATH)
 
-# UI Layout
+# Convert Turnaround Time safely to minutes
+def convert_turnaround(time_value):
+    try:
+        return pd.to_timedelta(time_value).total_seconds() / 60  # Convert to minutes
+    except:
+        return None  # Return None for invalid values
+
+# Set Streamlit theme settings
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-st.title("📊 MILV Daily Productivity")
-st.subheader("Upload your daily RVU file and analyze productivity metrics")
+# Sidebar - Logo & Filters
+with st.sidebar:
+    # Display MILV Logo
+    st.image(LOGO_PATH, use_column_width=True)
 
-# File Upload Handling
-uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
+    # File Upload Handling
+    st.subheader("📂 Upload Data")
+    uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
 
 # Load data
 if uploaded_file:
     df = save_uploaded_file(uploaded_file)
-    st.success("New file uploaded! Displaying the latest data.")
+    st.sidebar.success("✅ File uploaded successfully!")
 else:
     df = load_last_uploaded_file()
 
@@ -49,30 +60,31 @@ if df is not None:
     if "Date" in df.columns:
         df["Date"] = pd.to_datetime(df["Date"])
 
-        # Convert Turnaround Time (H:M:S) into minutes
-        df["Turnaround Time"] = pd.to_timedelta(df["Turnaround Time"]).dt.total_seconds() / 60
+        # Convert Turnaround Time safely
+        df["Turnaround Time"] = df["Turnaround Time"].astype(str).apply(convert_turnaround)
+        df = df.dropna(subset=["Turnaround Time"])  # Remove rows where conversion failed
 
         # Drop unnecessary columns
         df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors="ignore")
 
-        # Select Date Range
-        col1, col2 = st.columns(2)
-        with col1:
+        # Sidebar - Filters
+        with st.sidebar:
+            st.subheader("📅 Date Range")
             start_date = st.date_input("Start Date", df["Date"].min().date())
-        with col2:
             end_date = st.date_input("End Date", df["Date"].max().date())
 
-        # Filter by Date Range
+            # Multi-Select Provider Filtering
+            st.subheader("👨‍⚕️ Providers")
+            provider_options = df["Provider"].dropna().unique()
+            selected_providers = st.multiselect("Select Provider(s)", provider_options, default=provider_options)
+
+        # Filter by Date Range & Providers
         df_filtered = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
-
-        # Multi-Select Provider Filtering
-        provider_options = df_filtered["Provider"].dropna().unique()
-        selected_providers = st.multiselect("Select Provider(s)", provider_options, default=provider_options)
-
         if selected_providers:
             df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
 
         # Display Summary Statistics
+        st.title("📊 MILV Daily Productivity Dashboard")
         st.subheader(f"📋 Productivity Summary ({start_date} - {end_date})")
         metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
 
