@@ -7,8 +7,39 @@ import os
 # Set Streamlit page configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# Display logo
-st.image("/mnt/data/milv.png", width=250)
+# GitHub File URLs
+GITHUB_USERNAME = "gibsona83"
+GITHUB_REPO = "MILVRVU"
+GITHUB_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_USERNAME}/{GITHUB_REPO}/main/"
+GITHUB_IMAGE_URL = GITHUB_BASE_URL + "milv.png"
+GITHUB_ROSTER_URL = GITHUB_BASE_URL + "MILVRoster.csv"
+
+# Local File Paths
+IMAGE_PATH = "/mnt/data/milv.png"
+ROSTER_PATH = "/mnt/data/MILVRoster.csv"
+
+# Function to download files from GitHub if missing
+def download_file(url, save_path):
+    """Downloads a file from GitHub and saves it locally if not already available."""
+    try:
+        if not os.path.exists(save_path):
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                with open(save_path, "wb") as f:
+                    f.write(response.content)
+            else:
+                st.warning(f"⚠️ Failed to download {os.path.basename(save_path)} (HTTP {response.status_code}).")
+                return False
+        return True
+    except Exception as e:
+        st.error(f"Error downloading {os.path.basename(save_path)}: {e}")
+        return False
+
+# Ensure image is available
+if download_file(GITHUB_IMAGE_URL, IMAGE_PATH):
+    st.image(IMAGE_PATH, width=250)
+else:
+    st.warning("⚠️ Logo image not found. Using default styling.")
 
 st.title("📊 MILV Daily Productivity")
 
@@ -17,62 +48,44 @@ with st.sidebar:
     st.header("Upload RVU File")
     uploaded_file = st.file_uploader("Drag and drop RVU Master file here", type=["xlsx"])
 
-# Define colors for Primary Subspecialty (adjust for dark/light mode)
-SUBSPECIALTY_COLORS = {
-    "Interventional": "#1F77B4",  # Blue
-    "Neuroradiology": "#FF7F0E",  # Orange
-    "Diagnostic": "#2CA02C",  # Green
-    "Neuro-Interventional": "#D62728",  # Red
-    "Body": "#9467BD",  # Purple
-    "Pediatrics": "#8C564B",  # Brown
-    "Nuclear Med": "#E377C2",  # Pink
-    "Cardiac": "#7F7F7F",  # Gray
-    "Unknown": "#17BECF"  # Default cyan
-}
-
 @st.cache_data
 def load_roster():
-    """Downloads the MILV Roster from GitHub and loads it."""
-    github_url = "https://raw.githubusercontent.com/gibsona83/MILVRVU/main/MILVRoster.csv"
-    local_path = "/mnt/data/MILVRoster.csv"
+    """Loads the MILV Roster from GitHub if missing and processes it."""
+    if download_file(GITHUB_ROSTER_URL, ROSTER_PATH):
+        try:
+            df = pd.read_csv(ROSTER_PATH)
 
-    try:
-        if not os.path.exists(local_path):
-            response = requests.get(github_url, timeout=10)
-            if response.status_code == 200:
-                with open(local_path, "wb") as f:
-                    f.write(response.content)
-            else:
-                st.warning(f"⚠️ Failed to download MILVRoster.csv (HTTP {response.status_code}). Using default values.")
-                return None
+            # Clean up Employment Type formatting
+            df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
+            df["Employment Type"].fillna("Unknown", inplace=True)
 
-        df = pd.read_csv(local_path)
-        df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
-        df["Employment Type"].fillna("Unknown", inplace=True)
+            # Assign "NON MILV" if Primary Subspecialty is missing
+            df["Primary Subspecialty"].fillna("NON MILV", inplace=True)
 
-        return df
-    except Exception as e:
-        st.error(f"Error loading MILV Roster: {e}")
-        return None
+            return df
+        except Exception as e:
+            st.error(f"Error loading MILV Roster: {e}")
+            return None
+    return None
 
 def convert_turnaround(time_value):
     """Converts turnaround time from HH:MM:SS or float to minutes."""
     if pd.isna(time_value):
         return 0
 
-    if isinstance(time_value, float):  # Already a decimal format
+    if isinstance(time_value, float):
         return round(time_value * 60)
 
     if isinstance(time_value, str):
         parts = time_value.split(":")
-        if len(parts) == 3:  
+        if len(parts) == 3:
             try:
                 hours, minutes, seconds = map(int, parts)
-                return hours * 60 + minutes  
+                return hours * 60 + minutes
             except ValueError:
-                return 0  
+                return 0
 
-    return 0  
+    return 0
 
 @st.cache_data
 def load_data(file):
@@ -95,7 +108,7 @@ def load_data(file):
             rvu_df = rvu_df.merge(roster_df, on="Provider", how="left")
         else:
             rvu_df["Employment Type"] = "Unknown"
-            rvu_df["Primary Subspecialty"] = "Unknown"
+            rvu_df["Primary Subspecialty"] = "NON MILV"
 
         rvu_df.dropna(subset=['Date', 'Turnaround Time'], inplace=True)
 
@@ -118,11 +131,10 @@ def filter_data(df, date_range, employment_type, subspecialty):
     return df_filtered
 
 def plot_bar_chart(df, x_col, y_col, title):
-    """Generates a bar chart with Primary Subspecialty color coding."""
+    """Generates a bar chart sorted in ascending order."""
     if y_col in df.columns and not df.empty:
-        df = df.sort_values(by=y_col, ascending=True)  # Sort in ascending order
-        fig = px.bar(df, x=x_col, y=y_col, color="Primary Subspecialty",
-                     title=title, color_discrete_map=SUBSPECIALTY_COLORS)
+        df = df.sort_values(by=y_col, ascending=True)
+        fig = px.bar(df, x=x_col, y=y_col, color="Primary Subspecialty", title=title)
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning(f"'{y_col}' column is missing or no data available.")
