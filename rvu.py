@@ -55,6 +55,9 @@ with st.sidebar:
         roster_df = pd.read_csv(roster_path)
         roster_df["Provider"] = roster_df["Provider"].str.title()
         roster_df["Employment Type"] = roster_df["Employment Type"].apply(clean_employment_type)
+
+        # Remove blank employment types (ensuring they are non-null)
+        roster_df = roster_df.dropna(subset=["Employment Type"])
     else:
         roster_df = pd.DataFrame()
 
@@ -85,19 +88,32 @@ if df is not None and not df.empty:
     # Debugging output: Check data before filtering
     st.write(f"🔍 Total records before filtering: {len(df)}")
 
-    # Filters
+    # **Dropdown Filters**
     date_selection = st.date_input("Select Date", pd.to_datetime(df["Date"]).max())
-    provider_filter = st.multiselect("Select Provider(s)", df["Provider"].unique(), default=df["Provider"].unique())
-    employment_filter = st.multiselect("Select Employment Type", df["Employment Type"].dropna().unique(), default=df["Employment Type"].dropna().unique())
-    subspecialty_filter = st.multiselect("Select Primary Subspecialty", df["Primary Subspecialty"].dropna().unique(), default=df["Primary Subspecialty"].dropna().unique())
 
-    # Apply filters
-    df_filtered = df[
-        (df["Date"] == date_selection) &
-        (df["Provider"].isin(provider_filter)) &
-        (df["Employment Type"].isin(employment_filter)) &
-        (df["Primary Subspecialty"].isin(subspecialty_filter))
-    ]
+    # Provider Dropdown (Multi-Select with "ALL" Default)
+    provider_list = ["ALL"] + list(df["Provider"].dropna().unique())
+    selected_providers = st.multiselect("Select Provider(s)", provider_list, default="ALL")
+
+    # Employment Type Dropdown (Multi-Select with "ALL" Default)
+    employment_list = ["ALL"] + list(df["Employment Type"].dropna().unique())
+    selected_employment = st.multiselect("Select Employment Type", employment_list, default="ALL")
+
+    # Primary Subspecialty Dropdown (Multi-Select with "ALL" Default)
+    subspecialty_list = ["ALL"] + list(df["Primary Subspecialty"].dropna().unique())
+    selected_subspecialties = st.multiselect("Select Primary Subspecialty", subspecialty_list, default="ALL")
+
+    # **Apply Filters**
+    df_filtered = df[df["Date"] == date_selection]
+
+    if "ALL" not in selected_providers:
+        df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
+
+    if "ALL" not in selected_employment:
+        df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
+
+    if "ALL" not in selected_subspecialties:
+        df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
 
     # Debugging output: Check data after filtering
     st.write(f"✅ Records after filtering: {len(df_filtered)}")
@@ -120,32 +136,11 @@ else:
     col2.metric("Avg Procedures per Half-Day", f"{avg_procedures:.2f}")
     col3.metric("Avg Points per Half-Day", f"{avg_points:.2f}")
 
-    # **Turnaround Time - Grouped Bar Chart (Sorted Descending)**
+    # **Turnaround Time - Sorted Descending**
     tat_chart = px.bar(
         df_filtered.sort_values("Turnaround Time", ascending=False),
         x="Provider", y="Turnaround Time", color="Primary Subspecialty",
         title="Turnaround Time by Provider within Subspecialty",
-        labels={"Provider": "Provider", "Turnaround Time": "Minutes"},
         hover_data=["Provider"]
     )
     st.plotly_chart(tat_chart, use_container_width=True)
-
-    # **Procedures per Half-Day - Sorted Ascending**
-    proc_chart = px.bar(
-        df_filtered.sort_values("Procedures per Half-Day", ascending=True),
-        x="Provider", y="Procedures per Half-Day", color="Primary Subspecialty",
-        title="Procedures per Half Day by Provider",
-        labels={"Provider": "Provider", "Procedures per Half-Day": "Procedures"},
-        hover_data=["Provider"]
-    )
-    st.plotly_chart(proc_chart, use_container_width=True)
-
-    # **Points per Half-Day - Sorted Ascending**
-    points_chart = px.bar(
-        df_filtered.sort_values("Points per Half-Day", ascending=True),
-        x="Provider", y="Points per Half-Day", color="Primary Subspecialty",
-        title="Points per Half Day by Provider",
-        labels={"Provider": "Provider", "Points per Half-Day": "Points"},
-        hover_data=["Provider"]
-    )
-    st.plotly_chart(points_chart, use_container_width=True)
