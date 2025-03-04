@@ -121,6 +121,9 @@ if df is not None and not df.empty:
     # Debugging output: Check data after filtering
     st.write(f"✅ Records after filtering: {len(df_filtered)}")
 
+    # Display filtered dataframe for debugging
+    st.dataframe(df_filtered)
+
 # **Title Appears Even When No Data Is Available**
 st.subheader(f"📋 Productivity Summary: {date_selection}")
 
@@ -148,8 +151,6 @@ else:
             hover_data=["Provider"]
         )
         st.plotly_chart(tat_chart, use_container_width=True)
-    else:
-        st.warning("No valid Turnaround Time data available.")
 
     # **Procedures per Half-Day - Sorted Ascending**
     proc_chart = px.bar(
