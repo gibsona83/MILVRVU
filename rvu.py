@@ -124,6 +124,11 @@ with st.sidebar:
             if "ALL" not in selected_subspecialties:
                 df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
 
+    # ✅ Fix: Upload File Section (Ensure uploaded_file is always defined)
+    st.markdown("---")
+    st.subheader("📂 Upload Daily RVU File")
+    uploaded_file = st.file_uploader("", type=["xlsx"])  # ✅ Fix added here
+
 # Load data from uploaded file
 if uploaded_file:
     df = save_uploaded_file(uploaded_file)
@@ -159,20 +164,6 @@ if df is not None and not df_filtered.empty:
     if "Points per Half-Day" in df_filtered.columns:
         avg_points = df_filtered["Points per Half-Day"].mean()
         metrics_col3.metric("📈 Avg Points per Half Day", f"{avg_points:.2f}")
-
-    # Visualization
-    st.subheader("📊 Performance Insights")
-
-    # Color Code by Primary Subspecialty
-    category_order = df_filtered["Date"].unique().tolist()
-
-    # Turnaround Time Trends
-    if "Turnaround Time" in df_filtered.columns:
-        fig1 = px.line(df_filtered, x="Date", y="Turnaround Time", color="Primary Subspecialty",
-                       title="Turnaround Time Trends (Minutes)", markers=True,
-                       hover_data=["Provider", "Employment Type"],
-                       category_orders={"Date": category_order})
-        st.plotly_chart(fig1, use_container_width=True)
 
     # Display filtered data
     st.subheader("📋 Detailed Data")
