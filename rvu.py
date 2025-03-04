@@ -39,10 +39,21 @@ with st.sidebar:
     # Load existing file
     df = load_last_uploaded_file()
 
+    # Rename columns before filtering
+    if df is not None:
+        df = df.rename(columns={
+            "Author": "Provider",
+            "Procedure": "Total Procedures",
+            "Points": "Total Points",
+            "Turnaround": "Turnaround Time",
+            "Points/half day": "Points per Half-Day",
+            "Procedure/half": "Procedures per Half-Day"
+        })
+
     # Sidebar - Date Selection
     st.subheader("📅 Select Date or Range")
 
-    if df is not None:
+    if df is not None and "Date" in df.columns:
         df["Date"] = pd.to_datetime(df["Date"]).dt.date  # 🔥 Remove timestamps
         latest_date = df["Date"].max()
 
@@ -56,18 +67,21 @@ with st.sidebar:
             end_date = st.date_input("End Date", latest_date)
             df_filtered = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
 
-        # Multi-Select Provider Filtering with "ALL" Default
-        st.subheader("👨‍⚕️ Providers")
-        provider_options = df_filtered["Provider"].dropna().unique()
-        provider_options = ["ALL"] + list(provider_options)  # Add "ALL" option
+        # Ensure 'Provider' column exists before filtering
+        if "Provider" in df_filtered.columns:
+            st.subheader("👨‍⚕️ Providers")
+            provider_options = df_filtered["Provider"].dropna().unique()
+            provider_options = ["ALL"] + list(provider_options)  # Add "ALL" option
 
-        selected_providers = st.multiselect(
-            "Select Provider(s)", provider_options, default=["ALL"]
-        )
+            selected_providers = st.multiselect(
+                "Select Provider(s)", provider_options, default=["ALL"]
+            )
 
-        # Apply provider filter if not "ALL"
-        if "ALL" not in selected_providers:
-            df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
+            # Apply provider filter if not "ALL"
+            if "ALL" not in selected_providers:
+                df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
+        else:
+            st.warning("⚠️ No 'Provider' column found in the dataset.")
 
     # Move Upload File Section to the Bottom If File is Loaded
     st.markdown("---")
@@ -82,19 +96,10 @@ if uploaded_file:
     latest_date = df["Date"].max()
 
 if df is not None and not df_filtered.empty:
-    # Clean up column names
-    df_filtered = df_filtered.rename(columns={
-        "Author": "Provider",
-        "Procedure": "Total Procedures",
-        "Points": "Total Points",
-        "Turnaround": "Turnaround Time",
-        "Points/half day": "Points per Half-Day",
-        "Procedure/half": "Procedures per Half-Day"
-    })
-
     # Convert Turnaround Time safely
-    df_filtered["Turnaround Time"] = df_filtered["Turnaround Time"].astype(str).apply(convert_turnaround)
-    df_filtered = df_filtered.dropna(subset=["Turnaround Time"])  # Remove rows where conversion failed
+    if "Turnaround Time" in df_filtered.columns:
+        df_filtered["Turnaround Time"] = df_filtered["Turnaround Time"].astype(str).apply(convert_turnaround)
+        df_filtered = df_filtered.dropna(subset=["Turnaround Time"])  # Remove rows where conversion failed
 
     # Drop unnecessary columns
     df_filtered = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col], errors="ignore")
