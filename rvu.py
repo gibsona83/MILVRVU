@@ -75,7 +75,11 @@ with st.sidebar:
     uploaded_file = st.file_uploader("", type=["xlsx"])
 
     # Load RVU Data
-    df = save_uploaded_file(uploaded_file) if uploaded_file else load_last_uploaded_file()
+    df = None
+    if uploaded_file:
+        df = save_uploaded_file(uploaded_file)
+    else:
+        df = load_last_uploaded_file()
 
     if df is not None:
         df = df.rename(columns={
@@ -106,73 +110,52 @@ with st.sidebar:
 
         # Load default data as the latest date in dataset
         latest_date = df["Date"].max()
-        df_filtered = df[df["Date"] == latest_date]
+        df_filtered = df.loc[df["Date"] == latest_date].copy()  # ✅ Fix slicing warning
 
-        # Date Filter UI
-        st.subheader("📅 Select Date or Range")
-        date_filter_option = st.radio("Select Date Filter:", ["Single Date", "Date Range"], horizontal=True)
+        # Fix filters
+        df_filtered.dropna(subset=["Employment Type", "Primary Subspecialty"], inplace=True)
 
-        if date_filter_option == "Single Date":
-            selected_date = st.date_input("Select Date", latest_date)
-            df_filtered = df[df["Date"] == selected_date]
-        else:
-            start_date = st.date_input("Start Date", df["Date"].min())
-            end_date = st.date_input("End Date", latest_date)
-            df_filtered = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
-
-        # Provider Filter
-        if "Provider" in df_filtered.columns:
-            st.subheader("👨‍⚕️ Providers")
-            provider_options = ["ALL"] + sorted(df_filtered["Provider"].dropna().unique())
-            selected_providers = st.multiselect("Select Provider(s)", provider_options, default=["ALL"])
-            selected_providers = single_selection_logic(selected_providers)
-
-            if "ALL" not in selected_providers:
-                df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
-
-        # **Employment Type Filter (Remove NaN/empty values)**
-        if "Employment Type" in df_filtered.columns:
-            valid_employment_types = df_filtered["Employment Type"].dropna().replace("", None).dropna().unique()
-            if valid_employment_types.size > 0:
-                st.subheader("💼 Employment Type")
-                employment_options = ["ALL"] + list(valid_employment_types)
-                selected_employment = st.multiselect("Select Employment Type", employment_options, default=["ALL"])
-                selected_employment = single_selection_logic(selected_employment)
-
-                if "ALL" not in selected_employment:
-                    df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
-
-        # **Primary Subspecialty Filter (Remove NaN/empty values)**
-        if "Primary Subspecialty" in df_filtered.columns:
-            valid_subspecialties = df_filtered["Primary Subspecialty"].dropna().replace("", None).dropna().unique()
-            if valid_subspecialties.size > 0:
-                st.subheader("🔬 Primary Subspecialty")
-                subspecialty_options = ["ALL"] + list(valid_subspecialties)
-                selected_subspecialties = st.multiselect("Select Primary Subspecialty", subspecialty_options, default=["ALL"])
-                selected_subspecialties = single_selection_logic(selected_subspecialties)
-
-                if "ALL" not in selected_subspecialties:
-                    df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
-    else:
-        df_filtered = None
+        # Ensure `Date` is formatted properly (removing timestamps)
+        df_filtered["Date"] = df_filtered["Date"].astype(str)
 
 # Ensure valid data for visualization
 if df_filtered is not None and not df_filtered.empty:
     if "Turnaround Time" in df_filtered.columns:
         df_filtered["Turnaround Time"] = df_filtered["Turnaround Time"].astype(str).apply(convert_turnaround)
-        df_filtered = df_filtered.dropna(subset=["Turnaround Time"])
-
-    df_filtered = df_filtered.drop(columns=[col for col in df_filtered.columns if "Unnamed" in col], errors="ignore")
-
-    # ✅ Remove timestamps from visualizations
-    df_filtered["Date"] = df_filtered["Date"].astype(str)
+        df_filtered.dropna(subset=["Turnaround Time"], inplace=True)
 
     # Display Summary Statistics
     st.title("📊 MILV Daily Productivity Dashboard")
     st.subheader(f"📋 Productivity Summary for {latest_date}")
 
+    metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+
+    if "Turnaround Time" in df_filtered.columns:
+        avg_turnaround = df_filtered["Turnaround Time"].mean()
+        metrics_col1.metric("⏳ Avg Turnaround Time (mins)", f"{avg_turnaround:.2f}")
+
+    if "Procedures per Half-Day" in df_filtered.columns:
+        avg_procs = df_filtered["Procedures per Half-Day"].mean()
+        metrics_col2.metric("🔬 Avg Procedures per Half Day", f"{avg_procs:.2f}")
+
+    if "Points per Half-Day" in df_filtered.columns:
+        avg_points = df_filtered["Points per Half-Day"].mean()
+        metrics_col3.metric("📈 Avg Points per Half Day", f"{avg_points:.2f}")
+
     # **Visualizations**
     st.subheader("📊 Performance Insights")
-    st.plotly_chart(px.scatter(df_filtered, x="Date", y="Turnaround Time", color="Primary Subspecialty", title="Turnaround Time Trends"), use_container_width=True)
-    st.plotly_chart(px.bar(df_filtered, x="Date", y="Procedures per Half-Day", color="Primary Subspecialty", title="Procedures per Half Day by Provider", barmode="group"), use_container_width=True)
-    st.plotly_chart(px.line(df_filtered, x="Date", y="Points per Half-Day", color="Primary Subspecialty", title="Points per Half Day Over Time", markers=True), use_container_width=True)
+    
+    fig1 = px.scatter(df_filtered, x="Date", y="Turnaround Time", color="Primary Subspecialty",
+                      title="Turnaround Time Trends", hover_data=["Provider", "Employment Type"])
+    fig1.update_xaxes(type='category')  # ✅ Ensure date is categorical (no timestamps)
+    st.plotly_chart(fig1, use_container_width=True)
+
+    fig2 = px.bar(df_filtered, x="Date", y="Procedures per Half-Day", color="Primary Subspecialty",
+                  title="Procedures per Half Day by Provider", barmode="group")
+    fig2.update_xaxes(type='category')  # ✅ Ensure date is categorical (no timestamps)
+    st.plotly_chart(fig2, use_container_width=True)
+
+    fig3 = px.line(df_filtered, x="Date", y="Points per Half-Day", color="Primary Subspecialty",
+                   title="Points per Half Day Over Time", markers=True)
+    fig3.update_xaxes(type='category')  # ✅ Ensure date is categorical (no timestamps)
+    st.plotly_chart(fig3, use_container_width=True)
