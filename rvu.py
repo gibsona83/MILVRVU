@@ -88,26 +88,23 @@ if df is not None and not df.empty:
     # Ensure 'Date' column is formatted correctly
     df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
-    # Debugging output: Check data before filtering
-    st.write(f"🔍 Total records before filtering: {len(df)}")
+    # **Date Range Selection**
+    min_date, max_date = df["Date"].min(), df["Date"].max()
+    selected_date_range = st.date_input("Select Date Range", value=[min_date, max_date])
 
     # **Dropdown Filters**
-    date_selection = st.date_input("Select Date", pd.to_datetime(df["Date"]).max())
-
-    # Provider Dropdown (Multi-Select with "ALL" Default)
     provider_list = ["ALL"] + list(df["Provider"].dropna().unique())
     selected_providers = st.multiselect("Select Provider(s)", provider_list, default="ALL")
 
-    # Employment Type Dropdown (Multi-Select with "ALL" Default)
     employment_list = ["ALL"] + list(df["Employment Type"].dropna().unique())
     selected_employment = st.multiselect("Select Employment Type", employment_list, default="ALL")
 
-    # Primary Subspecialty Dropdown (Multi-Select with "ALL" Default)
     subspecialty_list = ["ALL"] + list(df["Primary Subspecialty"].dropna().unique())
     selected_subspecialties = st.multiselect("Select Primary Subspecialty", subspecialty_list, default="ALL")
 
     # **Apply Filters**
-    df_filtered = df[df["Date"] == date_selection]
+    start_date, end_date = selected_date_range
+    df_filtered = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
 
     if "ALL" not in selected_providers:
         df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
@@ -118,14 +115,12 @@ if df is not None and not df.empty:
     if "ALL" not in selected_subspecialties:
         df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
 
-    # Debugging output: Check data after filtering
+    # **Debugging output: Show dataset after filtering**
     st.write(f"✅ Records after filtering: {len(df_filtered)}")
-
-    # Display filtered dataframe for debugging
-    st.dataframe(df_filtered)
+    st.dataframe(df_filtered.head())  # Show first few rows
 
 # **Title Appears Even When No Data Is Available**
-st.subheader(f"📋 Productivity Summary: {date_selection}")
+st.subheader(f"📋 Productivity Summary: {selected_date_range}")
 
 # Ensure `df_filtered` is not empty before rendering charts
 if df_filtered.empty:
