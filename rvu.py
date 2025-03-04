@@ -6,7 +6,7 @@ from PIL import Image
 
 # File paths
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
-LOGO_PATH = "/mnt/data/milv.png"  # Ensure correct path
+LOGO_PATH = "/mnt/data/milv.png"
 
 # Function to load the last uploaded file
 def load_last_uploaded_file():
@@ -32,10 +32,13 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Sidebar - Logo & Filters
 with st.sidebar:
-    # Display MILV Logo
-    if os.path.exists(LOGO_PATH):
-        image = Image.open(LOGO_PATH)
-        st.image(image, use_container_width=True)
+    # Display MILV Logo (Fix: Load as bytes)
+    try:
+        with open(LOGO_PATH, "rb") as f:
+            image = Image.open(f)
+            st.image(image, use_container_width=True)
+    except:
+        st.warning("🔴 MILV Logo Not Found")
 
     # File Upload Handling
     st.subheader("📂 Upload Data")
@@ -77,7 +80,7 @@ if df is not None:
         with st.sidebar:
             st.subheader("📅 Select Date or Range")
 
-            date_filter_option = st.radio("Select Date Filter:", ["Single Date", "Date Range"], horizontal=True)
+            date_filter_option = st.radio("Filter by:", ["Single Date", "Date Range"], horizontal=True)
 
             if date_filter_option == "Single Date":
                 selected_date = st.date_input("Select Date", latest_date)
@@ -87,13 +90,13 @@ if df is not None:
                 end_date = st.date_input("End Date", latest_date)
                 df_filtered = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
 
-            # Multi-Select Provider Filtering
+            # Multi-Select Provider Filtering (Dropdown Style)
             st.subheader("👨‍⚕️ Providers")
             provider_options = df_filtered["Provider"].dropna().unique()
-            selected_providers = st.multiselect("Select Provider(s)", provider_options, default=provider_options)
+            selected_providers = st.multiselect("Select Provider(s)", ["ALL"] + list(provider_options), default="ALL")
 
-        # Apply provider filter
-        if selected_providers:
+        # Apply provider filter if not "ALL"
+        if "ALL" not in selected_providers:
             df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
 
         # Display Summary Statistics
