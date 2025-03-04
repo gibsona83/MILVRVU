@@ -3,164 +3,75 @@ import pandas as pd
 import plotly.express as px
 import os
 
-# Load MILV logo from GitHub
-LOGO_URL = "https://raw.githubusercontent.com/gibsona83/milvrvu/main/milv.png"
-
-# File path for storing the latest uploaded file
-LAST_FILE_PATH = "latest_uploaded_file.xlsx"
-
-# Function to load the last uploaded file
-def load_last_uploaded_file():
-    if os.path.exists(LAST_FILE_PATH):
-        return pd.read_excel(LAST_FILE_PATH)
-    return None
-
-# Function to save uploaded file persistently
-def save_uploaded_file(uploaded_file):
-    with open(LAST_FILE_PATH, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    return pd.read_excel(LAST_FILE_PATH)
-
-# Function to clean employment type (removes anything in brackets)
-def clean_employment_type(value):
-    import re
-    return re.sub(r"\[.*?\]", "", str(value)).strip()
-
-# Convert Turnaround Time safely to minutes
-def convert_turnaround(time_value):
-    try:
-        return pd.to_numeric(time_value, errors="coerce")  # Convert to numeric, force errors to NaN
-    except:
-        return None  # Return None for invalid values
-
-# Set Streamlit theme settings
+# Set Streamlit page configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# **Title Always Shows**
+# Title of the dashboard
 st.title("📊 MILV Daily Productivity")
 
-# Sidebar - Logo & Filters
+# Sidebar for file upload
 with st.sidebar:
-    # Display MILV Logo from GitHub
-    st.image(LOGO_URL, use_container_width=True)
+    st.header("Upload Data File")
+    uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx"])
 
-    # File uploader
-    uploaded_file = st.file_uploader("Upload Daily RVU File", type=["xlsx"])
-    
-    if uploaded_file:
-        df = save_uploaded_file(uploaded_file)
+# Function to load data
+def load_data(file):
+    try:
+        df = pd.read_excel(file)
+        st.success("Data loaded successfully!")
+        return df
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return pd.DataFrame()
+
+# Load data if file is uploaded
+if uploaded_file:
+    df = load_data(uploaded_file)
+    st.write("First few rows of the dataset:")
+    st.write(df.head())  # Display first few rows for verification
+
+    # Data preprocessing
+    try:
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
+        df['Turnaround Time'] = pd.to_numeric(df['Turnaround Time'], errors='coerce')
+        df.dropna(subset=['Date', 'Turnaround Time'], inplace=True)
+        st.success("Data preprocessing completed!")
+    except Exception as e:
+        st.error(f"Error during data preprocessing: {e}")
+
+    # Date range selection
+    min_date = df['Date'].min()
+    max_date = df['Date'].max()
+    date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+
+    # Filter data based on date range
+    start_date, end_date = date_range
+    df_filtered = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
+
+    # Display filtered data for debugging
+    st.write("Filtered Data:")
+    st.write(df_filtered.head())
+
+    # Check if filtered data is empty
+    if df_filtered.empty:
+        st.warning("No data available for the selected date range.")
     else:
-        df = load_last_uploaded_file()
+        # Plot Turnaround Time by Provider
+        fig_tat = px.bar(df_filtered, x='Provider', y='Turnaround Time', title='Turnaround Time by Provider')
+        st.plotly_chart(fig_tat)
 
-    # Load MILVRoster.csv for employment type and subspecialty mapping
-    roster_path = "MILVRoster.csv"
-    if os.path.exists(roster_path):
-        roster_df = pd.read_csv(roster_path)
-        roster_df["Provider"] = roster_df["Provider"].str.title()
-        roster_df["Employment Type"] = roster_df["Employment Type"].apply(clean_employment_type)
+        # Plot Procedures per Half-Day by Provider
+        if 'Procedures per Half-Day' in df_filtered.columns:
+            fig_proc = px.bar(df_filtered, x='Provider', y='Procedures per Half-Day', title='Procedures per Half-Day by Provider')
+            st.plotly_chart(fig_proc)
+        else:
+            st.warning("'Procedures per Half-Day' column is missing in the data.")
 
-        # Remove blank employment types (ensuring they are non-null)
-        roster_df = roster_df.dropna(subset=["Employment Type"])
-    else:
-        roster_df = pd.DataFrame()
-
-# Ensure `df_filtered` is initialized before use
-df_filtered = pd.DataFrame()
-
-if df is not None and not df.empty:
-    # Rename columns before filtering
-    df = df.rename(columns={
-        "Author": "Provider",
-        "Procedure": "Total Procedures",
-        "Points": "Total Points",
-        "Turnaround": "Turnaround Time",
-        "Points/half day": "Points per Half-Day",
-        "Procedure/half": "Procedures per Half-Day"
-    })
-
-    # Merge provider info from roster
-    if not roster_df.empty:
-        df = df.merge(roster_df, on="Provider", how="left")
-
-    # Convert Turnaround Time to numeric
-    df["Turnaround Time"] = df["Turnaround Time"].apply(convert_turnaround)
-
-    # Ensure 'Date' column is formatted correctly
-    df["Date"] = pd.to_datetime(df["Date"]).dt.date
-
-    # **Date Range Selection**
-    min_date, max_date = df["Date"].min(), df["Date"].max()
-    selected_date_range = st.date_input("Select Date Range", value=[min_date, max_date])
-
-    # **Dropdown Filters**
-    provider_list = ["ALL"] + list(df["Provider"].dropna().unique())
-    selected_providers = st.multiselect("Select Provider(s)", provider_list, default="ALL")
-
-    employment_list = ["ALL"] + list(df["Employment Type"].dropna().unique())
-    selected_employment = st.multiselect("Select Employment Type", employment_list, default="ALL")
-
-    subspecialty_list = ["ALL"] + list(df["Primary Subspecialty"].dropna().unique())
-    selected_subspecialties = st.multiselect("Select Primary Subspecialty", subspecialty_list, default="ALL")
-
-    # **Apply Filters**
-    start_date, end_date = selected_date_range
-    df_filtered = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
-
-    if "ALL" not in selected_providers:
-        df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
-
-    if "ALL" not in selected_employment:
-        df_filtered = df_filtered[df_filtered["Employment Type"].isin(selected_employment)]
-
-    if "ALL" not in selected_subspecialties:
-        df_filtered = df_filtered[df_filtered["Primary Subspecialty"].isin(selected_subspecialties)]
-
-    # **Debugging output: Show dataset after filtering**
-    st.write(f"✅ Records after filtering: {len(df_filtered)}")
-    st.dataframe(df_filtered.head())  # Show first few rows
-
-# **Title Appears Even When No Data Is Available**
-st.subheader(f"📋 Productivity Summary: {selected_date_range}")
-
-# Ensure `df_filtered` is not empty before rendering charts
-if df_filtered.empty:
-    st.warning("⚠️ No data available after filtering. Try adjusting the filters.")
+        # Plot Points per Half-Day by Provider
+        if 'Points per Half-Day' in df_filtered.columns:
+            fig_points = px.bar(df_filtered, x='Provider', y='Points per Half-Day', title='Points per Half-Day by Provider')
+            st.plotly_chart(fig_points)
+        else:
+            st.warning("'Points per Half-Day' column is missing in the data.")
 else:
-    # Compute Aggregate Metrics (Prevent NaN values)
-    avg_turnaround = df_filtered["Turnaround Time"].mean() if not df_filtered["Turnaround Time"].isna().all() else 0
-    avg_procedures = df_filtered["Procedures per Half-Day"].mean() if not df_filtered["Procedures per Half-Day"].isna().all() else 0
-    avg_points = df_filtered["Points per Half-Day"].mean() if not df_filtered["Points per Half-Day"].isna().all() else 0
-
-    # **Display Summary Metrics**
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Avg Turnaround Time (mins)", f"{avg_turnaround:.2f}")
-    col2.metric("Avg Procedures per Half-Day", f"{avg_procedures:.2f}")
-    col3.metric("Avg Points per Half-Day", f"{avg_points:.2f}")
-
-    # **Turnaround Time - Sorted Descending**
-    if not df_filtered["Turnaround Time"].isna().all():
-        tat_chart = px.bar(
-            df_filtered.sort_values("Turnaround Time", ascending=False),
-            x="Provider", y="Turnaround Time", color="Primary Subspecialty",
-            title="Turnaround Time by Provider within Subspecialty",
-            hover_data=["Provider"]
-        )
-        st.plotly_chart(tat_chart, use_container_width=True)
-
-    # **Procedures per Half-Day - Sorted Ascending**
-    proc_chart = px.bar(
-        df_filtered.sort_values("Procedures per Half-Day", ascending=True),
-        x="Provider", y="Procedures per Half-Day", color="Primary Subspecialty",
-        title="Procedures per Half Day by Provider",
-        hover_data=["Provider"]
-    )
-    st.plotly_chart(proc_chart, use_container_width=True)
-
-    # **Points per Half-Day - Sorted Ascending**
-    points_chart = px.bar(
-        df_filtered.sort_values("Points per Half-Day", ascending=True),
-        x="Provider", y="Points per Half-Day", color="Primary Subspecialty",
-        title="Points per Half Day by Provider",
-        hover_data=["Provider"]
-    )
-    st.plotly_chart(points_chart, use_container_width=True)
+    st.info("Please upload an Excel file to proceed.")
