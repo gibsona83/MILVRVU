@@ -45,30 +45,31 @@ with st.sidebar:
 
 @st.cache_data
 def load_roster():
-    """Loads MILV Roster directly from GitHub without local storage."""
-    st.info("📥 Attempting to load MILVRoster.csv from GitHub...")
+    """Loads MILV Roster correctly, ensuring missing values are handled."""
+    st.info("📥 Loading MILVRoster.csv from GitHub...")
+
     df = fetch_csv_from_github(GITHUB_ROSTER_URL)
-    
+
     if df is not None:
         try:
             # Ensure column names are clean
             df.columns = df.columns.str.strip()
-            
-            # Debugging: Show column names to confirm correct structure
-            st.write("✅ Columns in MILVRoster.csv:", df.columns.tolist())
 
-            # Ensure the required columns exist
-            if "Employment Type" not in df.columns or "Primary Subspecialty" not in df.columns:
-                st.error("❌ MILVRoster.csv is missing required columns. Please check the file format.")
+            # Check for required columns
+            if "Provider" not in df.columns or "Employment Type" not in df.columns or "Primary Subspecialty" not in df.columns:
+                st.error("❌ MILVRoster.csv is missing required columns! Check the file format.")
                 return None
 
-            # Clean up Employment Type formatting
-            df["Employment Type"] = df["Employment Type"].astype(str).str.replace(r"\[.*?\]", "", regex=True).str.strip()
-            df["Employment Type"].fillna("Unknown", inplace=True)
+            # Standardize text format (strip spaces & capitalize for consistency)
+            df["Provider"] = df["Provider"].str.strip().str.title()
+            df["Employment Type"] = df["Employment Type"].astype(str).str.strip().str.title()
+            df["Primary Subspecialty"] = df["Primary Subspecialty"].astype(str).str.strip().str.title()
 
-            # Assign "NON MILV" if Primary Subspecialty is missing
+            # Fill missing values
+            df["Employment Type"].fillna("Unknown", inplace=True)
             df["Primary Subspecialty"].fillna("NON MILV", inplace=True)
 
+            st.success("✅ MILVRoster.csv loaded successfully!")
             return df
         except Exception as e:
             st.error(f"❌ Error processing MILV Roster: {e}")
