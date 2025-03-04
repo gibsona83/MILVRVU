@@ -4,7 +4,7 @@ import os
 import plotly.express as px
 from PIL import Image
 
-# File path for storing the latest uploaded file
+# File paths
 LAST_FILE_PATH = "latest_uploaded_file.xlsx"
 LOGO_PATH = "/mnt/data/milv.png"  # Ensure correct path
 
@@ -32,12 +32,10 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Sidebar - Logo & Filters
 with st.sidebar:
-    # Display MILV Logo if available
+    # Display MILV Logo
     if os.path.exists(LOGO_PATH):
         image = Image.open(LOGO_PATH)
         st.image(image, use_container_width=True)
-    else:
-        st.warning("🔴 MILV Logo Not Found - Please upload the logo.")
 
     # File Upload Handling
     st.subheader("📂 Upload Data")
@@ -72,25 +70,36 @@ if df is not None:
         # Drop unnecessary columns
         df = df.drop(columns=[col for col in df.columns if "Unnamed" in col], errors="ignore")
 
-        # Sidebar - Filters
+        # Get latest date in dataset
+        latest_date = df["Date"].max().date()
+
+        # Sidebar - Date Selection
         with st.sidebar:
-            st.subheader("📅 Date Range")
-            start_date = st.date_input("Start Date", df["Date"].min().date())
-            end_date = st.date_input("End Date", df["Date"].max().date())
+            st.subheader("📅 Select Date or Range")
+
+            date_filter_option = st.radio("Select Date Filter:", ["Single Date", "Date Range"], horizontal=True)
+
+            if date_filter_option == "Single Date":
+                selected_date = st.date_input("Select Date", latest_date)
+                df_filtered = df[df["Date"].dt.date == selected_date]
+            else:
+                start_date = st.date_input("Start Date", df["Date"].min().date())
+                end_date = st.date_input("End Date", latest_date)
+                df_filtered = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
 
             # Multi-Select Provider Filtering
             st.subheader("👨‍⚕️ Providers")
-            provider_options = df["Provider"].dropna().unique()
+            provider_options = df_filtered["Provider"].dropna().unique()
             selected_providers = st.multiselect("Select Provider(s)", provider_options, default=provider_options)
 
-        # Filter by Date Range & Providers
-        df_filtered = df[(df["Date"].dt.date >= start_date) & (df["Date"].dt.date <= end_date)]
+        # Apply provider filter
         if selected_providers:
             df_filtered = df_filtered[df_filtered["Provider"].isin(selected_providers)]
 
         # Display Summary Statistics
         st.title("📊 MILV Daily Productivity Dashboard")
-        st.subheader(f"📋 Productivity Summary ({start_date} - {end_date})")
+        st.subheader(f"📋 Productivity Summary")
+
         metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
 
         if "Turnaround Time" in df_filtered.columns:
@@ -127,7 +136,7 @@ if df is not None:
             st.plotly_chart(fig3, use_container_width=True)
 
         # Display filtered data in a table
-        st.subheader(f"📋 Detailed Data for {start_date} - {end_date}")
+        st.subheader("📋 Detailed Data")
         st.dataframe(df_filtered, use_container_width=True)
 
     else:
