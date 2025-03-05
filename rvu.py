@@ -92,17 +92,17 @@ if df is not None:
     else:
         st.warning("⚠️ Column 'Points/half day' not found in the dataset.")
 
-    # Procedures per Half-Day
+    # Procedures per Half-Day (FIXED COLUMN NAME)
     st.subheader("🛠️ Procedures per Half-Day")
     fig, ax = plt.subplots()
-    if "procedure/half day" in df_filtered.columns:
-        df_filtered.groupby("shift")["procedure/half day"].sum().plot(kind="bar", ax=ax)
+    if "procedure/half" in df_filtered.columns:  # Corrected column name
+        df_filtered.groupby("shift")["procedure/half"].sum().plot(kind="bar", ax=ax)
         ax.set_ylabel("Procedures")
         ax.set_xlabel("Shift")
         ax.set_title("Procedures per Half-Day by Shift")
         st.pyplot(fig)
     else:
-        st.warning("⚠️ Column 'Procedure/half day' not found in the dataset.")
+        st.warning("⚠️ Column 'Procedure/half' not found in the dataset.")
 
 else:
     st.warning("Please upload an Excel file to start analyzing data.")
