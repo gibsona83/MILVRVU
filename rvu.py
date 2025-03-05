@@ -25,8 +25,8 @@ def load_data(file_path):
     # Ensure "date" column is properly converted
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
-        df = df.dropna(subset=["date"])  # Remove NaT values in "date"
-        df["date"] = df["date"].dt.normalize()  # Normalize datetime to remove time component
+        df = df.dropna(subset=["date"])  # Remove NaT values
+        df["date"] = df["date"].dt.normalize()  # Normalize to remove time component
 
     # Ensure "turnaround" column is properly converted
     if "turnaround" in df.columns:
@@ -67,24 +67,18 @@ if df is not None:
     # Sidebar Filters
     st.sidebar.subheader("📅 Filter Data")
     df["date"] = pd.to_datetime(df["date"], errors="coerce")  # Ensure valid datetime
+    df = df.dropna(subset=["date"])  # Remove any remaining NaT values
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
 
-    # Ensure correct handling of single-date selection
+    # Get date selection from sidebar (returns a Python date object)
     date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
-    # Convert selected dates to pandas datetime format
+    # Convert Python date object(s) to pandas Timestamp (datetime64[ns])
     if isinstance(date_selection, list) and len(date_selection) == 2:
-        start_date, end_date = pd.to_datetime(date_selection[0]), pd.to_datetime(date_selection[1])
+        start_date, end_date = pd.Timestamp(date_selection[0]), pd.Timestamp(date_selection[1])
     else:
-        start_date = end_date = pd.to_datetime(date_selection)  # Single date selected
-
-    # Convert start_date and end_date explicitly to datetime64[ns]
-    start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
-
-    # Ensure df["date"] is still a datetime object and has no NaT values
-    df = df.dropna(subset=["date"])  # Remove NaT values
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        start_date = end_date = pd.Timestamp(date_selection)  # Single date selected
 
     # Sidebar - Provider Selection
     st.sidebar.subheader("👩‍⚕️ Provider Selection")
