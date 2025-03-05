@@ -5,9 +5,9 @@ import io
 import matplotlib.pyplot as plt
 
 # Page Configuration
-st.set_page_config(page_title="MILV RVU Dashboard", layout="wide")
+st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-st.title("📊 MILV RVU Dashboard")
+st.title("📊 MILV Daily Productivity")
 
 # Define storage path for the latest uploaded file
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
@@ -57,58 +57,69 @@ if uploaded_file:
 if df is not None:
     st.info(latest_file_status)
 
-    # Sidebar - Date Range Selection
-    min_date, max_date = df["date"].min(), df["date"].max()
-    date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+    # Default to the latest date
+    latest_date = df["date"].max()
+    st.sidebar.subheader("Filter Data")
+    selected_date = st.sidebar.date_input("Select Date", latest_date)
 
     # Sidebar - Provider Selection
     providers = df["author"].unique()
     selected_providers = st.sidebar.multiselect("Select Provider(s)", providers, default=providers)
 
-    # Filter data by selected date range and providers
-    df_filtered = df[(df["date"] >= pd.to_datetime(date_range[0])) & 
-                     (df["date"] <= pd.to_datetime(date_range[1])) & 
-                     (df["author"].isin(selected_providers))]
+    # Filter data for selected date and providers
+    df_filtered = df[(df["date"] == pd.to_datetime(selected_date)) & (df["author"].isin(selected_providers))]
 
     # Summary Metrics
     st.subheader("📊 Key Metrics")
     col1, col2, col3 = st.columns(3)
-    col1.metric("📅 Date Range", f"{date_range[0]} to {date_range[1]}")
+    col1.metric("📅 Selected Date", selected_date.strftime("%Y-%m-%d"))
     col2.metric("🔢 Total Points", df_filtered["points"].sum())
     col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
 
-    # Turnaround Time by Provider
+    # Turnaround Time by Provider (Descending Order)
     st.subheader("⏳ Turnaround Time by Provider")
-    fig, ax = plt.subplots()
-    df_filtered.groupby("author")["turnaround"].mean().sort_values().plot(kind="bar", ax=ax)
+    fig, ax = plt.subplots(figsize=(12, 6))  # Increase figure size
+    df_filtered.groupby("author")["turnaround"].mean().sort_values(ascending=False).plot(kind="bar", ax=ax)
     ax.set_ylabel("Minutes")
     ax.set_xlabel("Provider")
     ax.set_title("Average Turnaround Time per Provider")
+    plt.xticks(rotation=45, ha="right")  # Rotate labels for better readability
     st.pyplot(fig)
 
-    # Points per Provider
+    # Points per Provider (Ascending Order)
     st.subheader("📈 Points per Provider")
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(12, 6))  # Increase figure size
     if "points/half day" in df_filtered.columns:
         df_filtered.groupby("author")["points/half day"].sum().sort_values().plot(kind="bar", ax=ax)
         ax.set_ylabel("Points")
         ax.set_xlabel("Provider")
         ax.set_title("Total Points per Provider")
+        plt.xticks(rotation=45, ha="right")  # Rotate labels for better readability
         st.pyplot(fig)
     else:
         st.warning("⚠️ Column 'Points/half day' not found in the dataset.")
 
-    # Procedures per Provider
+    # Procedures per Provider (Ascending Order)
     st.subheader("🛠️ Procedures per Provider")
-    fig, ax = plt.subplots()
-    if "procedure/half" in df_filtered.columns:  # Corrected column name
+    fig, ax = plt.subplots(figsize=(12, 6))  # Increase figure size
+    if "procedure/half" in df_filtered.columns:
         df_filtered.groupby("author")["procedure/half"].sum().sort_values().plot(kind="bar", ax=ax)
         ax.set_ylabel("Procedures")
         ax.set_xlabel("Provider")
         ax.set_title("Total Procedures per Provider")
+        plt.xticks(rotation=45, ha="right")  # Rotate labels for better readability
         st.pyplot(fig)
     else:
         st.warning("⚠️ Column 'Procedure/half' not found in the dataset.")
+
+    # Display Filtered Data as Table
+    st.subheader("📄 Detailed Data")
+    df_sorted = df_filtered.sort_values(by=["turnaround"], ascending=[False])
+    st.dataframe(df_sorted)
+
+    # Download Filtered Data as CSV
+    csv = df_sorted.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download CSV", csv, f"MILV_Daily_Productivity_{selected_date}.csv", "text/csv")
 
 else:
     st.warning("Please upload an Excel file to start analyzing data.")
