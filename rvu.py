@@ -22,18 +22,18 @@ def load_data(file_path):
     # Standardize column names (strip spaces, lowercase)
     df.columns = df.columns.str.strip().str.lower()
 
-    # Convert "Date" column to datetime and handle errors
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    # Ensure "date" column is properly converted
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = df.dropna(subset=["date"])  # Remove NaT values in "date"
 
-    # Drop rows where date is NaT (optional: only if NaT dates should not be included)
-    df = df.dropna(subset=["date"])
-
-    # Ensure turnaround column is safely converted
-    df["turnaround"] = df["turnaround"].astype(str).str.strip()
-    df["turnaround"] = df["turnaround"].replace(["", "nan", "N/A"], pd.NA)  # Handle missing values
-    df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")  # Convert to timedelta
-    df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
-    df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
+    # Ensure "turnaround" column is properly converted
+    if "turnaround" in df.columns:
+        df["turnaround"] = df["turnaround"].astype(str).str.strip()
+        df["turnaround"] = df["turnaround"].replace(["", "nan", "N/A"], pd.NA)  # Handle missing values
+        df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")  # Convert to timedelta
+        df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
+        df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
 
     return df
 
@@ -58,8 +58,14 @@ if uploaded_file:
 if df is not None:
     st.sidebar.info(latest_file_status)
 
+    # Ensure "date" column exists before filtering
+    if "date" not in df.columns:
+        st.error("❌ The uploaded file does not contain a 'date' column. Please check your file.")
+        st.stop()
+
     # Sidebar Filters
     st.sidebar.subheader("📅 Filter Data")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")  # Ensure valid datetime
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
 
@@ -72,8 +78,9 @@ if df is not None:
     else:
         start_date = end_date = pd.to_datetime(date_selection)  # Single date selected
 
-    # Ensure df["date"] is still a datetime object and has no NaT values
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dropna()
+    # Ensure df["date"] is still a datetime object and no NaT values
+    df = df.dropna(subset=["date"])  # Remove NaT values
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     # Sidebar - Provider Selection
     st.sidebar.subheader("👩‍⚕️ Provider Selection")
