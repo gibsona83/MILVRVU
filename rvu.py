@@ -22,23 +22,19 @@ def load_roster():
 def convert_turnaround(value):
     """Converts turnaround time from HH:MM:SS format to total minutes."""
     try:
-        if isinstance(value, str):
-            value = value.strip()  # Remove any extra spaces
-            
-            # Try parsing as HH:MM:SS
-            try:
-                t = datetime.datetime.strptime(value, "%H:%M:%S").time()
-                total_minutes = t.hour * 60 + t.minute + t.second / 60  # Convert to total minutes
-                return round(total_minutes, 2)  # Return rounded value
-            except ValueError:
-                st.warning(f"⚠️ Unexpected format in Turnaround Time: {value}")
-                return None
+        if pd.isna(value) or value is None:
+            return None  # Handle missing values safely
 
-        elif isinstance(value, (int, float)):  # If it's already a number, return as is
-            return float(value)
+        value = str(value).strip()  # Ensure value is a string
 
-        else:
-            return None  # If it's an unexpected format, return None
+        # Try parsing as HH:MM:SS
+        try:
+            t = datetime.datetime.strptime(value, "%H:%M:%S").time()
+            total_minutes = t.hour * 60 + t.minute + t.second / 60  # Convert to total minutes
+            return round(total_minutes, 2)  # Return rounded value
+        except ValueError:
+            st.warning(f"⚠️ Unexpected format in Turnaround Time: {value}")
+            return None
 
     except Exception as e:
         st.error(f"❌ Error converting turnaround time ({value}): {e}")
@@ -85,7 +81,7 @@ def load_data(file):
 
         # Convert turnaround time if column exists
         if "Turnaround Time" in rvu_df.columns:
-            rvu_df["Turnaround Time"] = rvu_df["Turnaround Time"].apply(convert_turnaround)
+            rvu_df["Turnaround Time"] = rvu_df["Turnaround Time"].astype(str).apply(convert_turnaround)
 
         # Normalize provider names
         rvu_df["Provider"] = rvu_df["Provider"].str.strip().str.title()
