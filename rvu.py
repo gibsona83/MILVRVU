@@ -60,23 +60,26 @@ if df is not None:
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
     df = df.dropna(subset=["date"])  # Ensure no NaT values
 
-    latest_date = df["date"].max()
-    min_date, max_date = df["date"].min(), latest_date
+    min_date = df["date"].min().date()
+    latest_date = df["date"].max().date()
+    max_date = latest_date  # Most recent date in dataset
 
-    # Handle date selection correctly
-    date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
+    # Date range selector with latest date as default
+    date_selection = st.sidebar.date_input(
+        "Select Date Range",
+        value=(latest_date, latest_date),
+        min_value=min_date,
+        max_value=max_date
+    )
 
-    # **Fix: Ensure proper conversion of date selection**
-    if isinstance(date_selection, tuple) or isinstance(date_selection, list):
-        # Two dates selected (range)
-        start_date = pd.to_datetime(date_selection[0])
-        end_date = pd.to_datetime(date_selection[1])
-    else:
-        # Single date selected
-        start_date = end_date = pd.to_datetime(date_selection)
+    # Handle date selection
+    start_date = pd.to_datetime(date_selection[0])
+    end_date = pd.to_datetime(date_selection[1])
 
-    # Convert `df["date"]` to ensure it's datetime64[ns]
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    # Validate date order
+    if start_date > end_date:
+        st.sidebar.error("Error: End date must be after start date")
+        st.stop()
 
     # Sidebar - Provider Selection
     st.sidebar.subheader("👩‍⚕️ Provider Selection")
@@ -89,11 +92,6 @@ if df is not None:
     if all_option in selected_providers or not selected_providers:
         selected_providers = providers  # Select all providers
 
-    # Debugging: Print types before filtering
-    st.sidebar.text(f"start_date type: {type(start_date)}")
-    st.sidebar.text(f"end_date type: {type(end_date)}")
-    st.sidebar.text(f"df['date'] dtype: {df['date'].dtype}")
-
     # Filtering data
     df_filtered = df[
         (df["date"] >= start_date) & 
@@ -101,23 +99,33 @@ if df is not None:
         (df["author"].isin(selected_providers))
     ]
 
-    # **AGGREGATE METRICS AT THE TOP**
-    st.subheader(f"📊 Aggregate Measures for {start_date.strftime('%Y-%m-%d')}" if start_date == end_date else 
-                 f"📊 Aggregate Measures from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-
+    # Aggregate Metrics
+    date_range_text = (
+        f"for {start_date.strftime('%Y-%m-%d')}" 
+        if start_date == end_date
+        else f"from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+    )
+    
+    st.subheader(f"📊 Aggregate Measures {date_range_text}")
+    
     col1, col2, col3 = st.columns(3)
     col1.metric("🔢 Total Points", df_filtered["points"].sum())
     col2.metric("🛠️ Total Procedures", df_filtered["procedure"].sum())
     col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
 
-    # Show Detailed Data
+    # Detailed Data Display
     st.subheader("📄 Detailed Data Overview")
     df_sorted = df_filtered.sort_values(by=["turnaround"], ascending=[True])
     st.dataframe(df_sorted)
 
-    # Download Data
+    # Download Feature
     csv = df_sorted.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download CSV", csv, f"MILV_Daily_Productivity_{start_date}_to_{end_date}.csv", "text/csv")
+    st.download_button(
+        "📥 Download CSV",
+        csv,
+        f"MILV_Daily_Productivity_{start_date.date()}_to_{end_date.date()}.csv",
+        "text/csv"
+    )
 
 else:
     st.warning("Please upload an Excel file to start analyzing data.")
