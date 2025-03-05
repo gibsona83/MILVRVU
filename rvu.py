@@ -26,6 +26,7 @@ def load_data(file_path):
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df = df.dropna(subset=["date"])  # Remove NaT values in "date"
+        df["date"] = df["date"].dt.normalize()  # Normalize datetime to remove time component
 
     # Ensure "turnaround" column is properly converted
     if "turnaround" in df.columns:
@@ -78,7 +79,10 @@ if df is not None:
     else:
         start_date = end_date = pd.to_datetime(date_selection)  # Single date selected
 
-    # Ensure df["date"] is still a datetime object and no NaT values
+    # Convert start_date and end_date explicitly to datetime64[ns]
+    start_date, end_date = pd.to_datetime(start_date), pd.to_datetime(end_date)
+
+    # Ensure df["date"] is still a datetime object and has no NaT values
     df = df.dropna(subset=["date"])  # Remove NaT values
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
