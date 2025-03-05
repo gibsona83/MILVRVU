@@ -13,11 +13,21 @@ st.title("📊 MILV RVU Dashboard")
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
 
 def load_data(file_path):
-    """Loads data from an Excel file."""
+    """Loads data from an Excel file and ensures Turnaround values are valid."""
     xls = pd.ExcelFile(file_path)
     df = xls.parse(xls.sheet_names[0])
-    df["Date"] = pd.to_datetime(df["Date"])
-    df["Turnaround"] = pd.to_timedelta(df["Turnaround"]).dt.total_seconds() / 60  # Convert TAT to minutes
+
+    # Convert "Date" column to datetime
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+
+    # Handle Turnaround column safely
+    df["Turnaround"] = df["Turnaround"].astype(str).str.strip()  # Remove spaces
+    df["Turnaround"] = pd.to_timedelta(df["Turnaround"], errors="coerce")  # Convert to timedelta
+    df["Turnaround"] = df["Turnaround"].dt.total_seconds() / 60  # Convert to minutes
+
+    # Fill NaN values with 0 for Turnaround (if necessary)
+    df["Turnaround"] = df["Turnaround"].fillna(0)
+
     return df
 
 # Check if there is a stored file
