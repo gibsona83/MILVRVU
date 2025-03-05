@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import io
 import matplotlib.pyplot as plt
 
 # Page Configuration
@@ -27,9 +26,7 @@ def load_data(file_path):
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     # Handle Turnaround column safely
-    df["turnaround"] = df["turnaround"].astype(str).str.strip()
-    df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")
-    df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
+    df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce").dt.total_seconds() / 60  # Convert to minutes
     df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
 
     return df
@@ -59,17 +56,17 @@ if df is not None:
     st.sidebar.subheader("📅 Filter Data")
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
-    
+
     # Ensure correct handling of single-date selection
-    date_range = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
+    date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
-    # If only one date is selected, convert it into a range
-    if isinstance(date_range, tuple) and len(date_range) == 2:
-        start_date, end_date = date_range
+    # Convert selected dates to a valid datetime range
+    if isinstance(date_selection, list) and len(date_selection) == 2:
+        start_date, end_date = pd.to_datetime(date_selection[0]), pd.to_datetime(date_selection[1])
     else:
-        start_date = end_date = date_range  # Single date selected
+        start_date = end_date = pd.to_datetime(date_selection)  # Single date selected
 
-    # Sidebar - Provider Selection with Improved Logic
+    # Sidebar - Provider Selection
     st.sidebar.subheader("👩‍⚕️ Provider Selection")
     providers = df["author"].unique().tolist()
     all_option = "ALL Providers"
@@ -78,15 +75,13 @@ if df is not None:
     selected_providers = st.sidebar.multiselect("Select Provider(s)", [all_option] + providers, default=[all_option])
 
     # Handle Selection Logic
-    if all_option in selected_providers:
+    if all_option in selected_providers or not selected_providers:
         selected_providers = providers  # Select all providers
-    elif not selected_providers:  
-        selected_providers = providers  # Reset to all providers if none are selected
 
     # Filter data
     df_filtered = df[
-        (df["date"] >= pd.to_datetime(start_date)) & 
-        (df["date"] <= pd.to_datetime(end_date)) & 
+        (df["date"] >= start_date) & 
+        (df["date"] <= end_date) & 
         (df["author"].isin(selected_providers))
     ]
 
@@ -132,7 +127,7 @@ if df is not None:
         else:
             st.warning("⚠️ No turnaround time data available for the selected filters.")
 
-        # Points per Provider (Descending Order) - Now Clearly Labeled as "Points per Half Day"
+        # Points per Provider (Per Half Day)
         st.subheader("📈 Points per Provider (Per Half Day)")
         fig, ax = plt.subplots(figsize=chart_size)
         if "points/half day" in df_filtered.columns:
@@ -147,7 +142,7 @@ if df is not None:
             else:
                 st.warning("⚠️ No points data available for the selected filters.")
 
-        # Procedures per Provider (Descending Order) - Now Clearly Labeled as "Procedures per Half Day"
+        # Procedures per Provider (Per Half Day)
         st.subheader("🛠️ Procedures per Provider (Per Half Day)")
         fig, ax = plt.subplots(figsize=chart_size)
         if "procedure/half" in df_filtered.columns:
