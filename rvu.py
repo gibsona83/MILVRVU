@@ -28,17 +28,6 @@ def load_data(file_path):
         df = df.dropna(subset=["date"])  # Remove NaT values in "date"
         df["date"] = df["date"].dt.normalize()  # Normalize to remove time component
 
-    # Ensure "turnaround" column is properly converted
-    if "turnaround" in df.columns:
-        df["turnaround"] = df["turnaround"].astype(str).str.strip()
-
-        # Convert invalid formats like "1.04:06:07" into a standard format
-        df["turnaround"] = df["turnaround"].apply(lambda x: x.replace(".", ":") if "." in x else x)
-
-        df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")  # Convert to timedelta
-        df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
-        df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
-
     return df
 
 # Check if a stored file exists
@@ -77,11 +66,15 @@ if df is not None:
     # Handle date input correctly
     date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
-    # Convert Python date object(s) to pandas Timestamp (datetime64[ns])
+    # Convert date selection to pandas Timestamps
     if isinstance(date_selection, list) and len(date_selection) == 2:
-        start_date, end_date = pd.Timestamp(date_selection[0]), pd.Timestamp(date_selection[1])
+        start_date, end_date = pd.to_datetime(date_selection[0]), pd.to_datetime(date_selection[1])
     else:
-        start_date = end_date = pd.Timestamp(date_selection)  # Single date selected
+        start_date = end_date = pd.to_datetime(date_selection)  # Single date selected
+
+    # Ensure df["date"] is still a datetime object
+    if df["date"].dtype != "datetime64[ns]":
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     # Sidebar - Provider Selection
     st.sidebar.subheader("👩‍⚕️ Provider Selection")
@@ -94,6 +87,11 @@ if df is not None:
     # Handle Selection Logic
     if all_option in selected_providers or not selected_providers:
         selected_providers = providers  # Select all providers
+
+    # Debugging: Print data types before filtering
+    st.sidebar.text(f"start_date type: {type(start_date)}")
+    st.sidebar.text(f"end_date type: {type(end_date)}")
+    st.sidebar.text(f"df['date'] type: {df['date'].dtype}")
 
     # Filter data, ensuring valid datetime comparison
     df_filtered = df[
