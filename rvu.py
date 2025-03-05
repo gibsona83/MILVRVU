@@ -22,11 +22,14 @@ def load_data(file_path):
     # Standardize column names (strip spaces, lowercase)
     df.columns = df.columns.str.strip().str.lower()
 
-    # Convert "Date" column to datetime
+    # Convert "Date" column to datetime and handle errors
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
-    # Clean and convert "Turnaround" column safely
-    df["turnaround"] = df["turnaround"].astype(str).str.strip()  # Ensure it's a string
+    # Drop rows where date is NaT (optional: only if NaT dates should not be included)
+    df = df.dropna(subset=["date"])
+
+    # Ensure turnaround column is safely converted
+    df["turnaround"] = df["turnaround"].astype(str).str.strip()
     df["turnaround"] = df["turnaround"].replace(["", "nan", "N/A"], pd.NA)  # Handle missing values
     df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")  # Convert to timedelta
     df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
@@ -63,11 +66,14 @@ if df is not None:
     # Ensure correct handling of single-date selection
     date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
-    # Convert selected dates to a valid datetime range
+    # Convert selected dates to pandas datetime format
     if isinstance(date_selection, list) and len(date_selection) == 2:
         start_date, end_date = pd.to_datetime(date_selection[0]), pd.to_datetime(date_selection[1])
     else:
         start_date = end_date = pd.to_datetime(date_selection)  # Single date selected
+
+    # Ensure df["date"] is still a datetime object and has no NaT values
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dropna()
 
     # Sidebar - Provider Selection
     st.sidebar.subheader("👩‍⚕️ Provider Selection")
@@ -81,7 +87,7 @@ if df is not None:
     if all_option in selected_providers or not selected_providers:
         selected_providers = providers  # Select all providers
 
-    # Filter data
+    # Filter data, ensuring valid datetime comparison
     df_filtered = df[
         (df["date"] >= start_date) & 
         (df["date"] <= end_date) & 
@@ -105,60 +111,6 @@ if df is not None:
     # Download Data
     csv = df_sorted.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Download CSV", csv, f"MILV_Daily_Productivity_{start_date}_to_{end_date}.csv", "text/csv")
-
-    # Visualization Controls
-    st.subheader("📊 Visualizations")
-    expand_charts = st.toggle("🔍 Click to Expand Charts", value=False)
-
-    chart_size = (12, 4) if not expand_charts else (16, 6)  # Adjust chart size dynamically
-
-    df_grouped = df_filtered.groupby("author").mean()
-    top_n = 30  # Limit provider count in charts
-
-    if not df_grouped.empty:
-        # Turnaround Time by Provider (Ascending Order)
-        st.subheader("⏳ Turnaround Time per Provider")
-        fig, ax = plt.subplots(figsize=chart_size)
-        df_sorted = df_grouped["turnaround"].sort_values(ascending=True)
-        if not df_sorted.empty:
-            df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#0072CE")
-            ax.set_ylabel("Minutes")
-            ax.set_xlabel("Provider")
-            ax.set_title("Turnaround Time per Provider (Lowest First)")
-            plt.xticks(rotation=45, ha="right")
-            st.pyplot(fig)
-        else:
-            st.warning("⚠️ No turnaround time data available for the selected filters.")
-
-        # Points per Provider (Per Half Day)
-        st.subheader("📈 Points per Provider (Per Half Day)")
-        fig, ax = plt.subplots(figsize=chart_size)
-        if "points/half day" in df_filtered.columns:
-            df_sorted = df_grouped["points/half day"].sort_values(ascending=False)
-            if not df_sorted.empty:
-                df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#002F6C")
-                ax.set_ylabel("Points per Half Day")
-                ax.set_xlabel("Provider")
-                ax.set_title("Total Points per Provider (Per Half Day)")
-                plt.xticks(rotation=45, ha="right")
-                st.pyplot(fig)
-            else:
-                st.warning("⚠️ No points data available for the selected filters.")
-
-        # Procedures per Provider (Per Half Day)
-        st.subheader("🛠️ Procedures per Provider (Per Half Day)")
-        fig, ax = plt.subplots(figsize=chart_size)
-        if "procedure/half" in df_filtered.columns:
-            df_sorted = df_grouped["procedure/half"].sort_values(ascending=False)
-            if not df_sorted.empty:
-                df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#0072CE")
-                ax.set_ylabel("Procedures per Half Day")
-                ax.set_xlabel("Provider")
-                ax.set_title("Total Procedures per Provider (Per Half Day)")
-                plt.xticks(rotation=45, ha="right")
-                st.pyplot(fig)
-            else:
-                st.warning("⚠️ No procedures data available for the selected filters.")
 
 else:
     st.warning("Please upload an Excel file to start analyzing data.")
