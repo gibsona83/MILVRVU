@@ -57,12 +57,13 @@ if uploaded_file:
 if df is not None:
     st.info(latest_file_status)
 
-    # Sidebar - Date Range Selection (New Feature)
+    # Sidebar - Date Range Selection (Pre-select latest date)
     st.sidebar.subheader("Filter Data")
-    min_date, max_date = df["date"].min(), df["date"].max()
-    date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+    latest_date = df["date"].max()
+    min_date, max_date = df["date"].min(), latest_date
+    date_range = st.sidebar.date_input("Select Date Range", [latest_date, latest_date], min_value=min_date, max_value=max_date)
 
-    # Sidebar - Searchable Provider Dropdown (New Feature)
+    # Sidebar - Searchable Provider Dropdown
     providers = df["author"].unique()
     selected_providers = st.sidebar.multiselect(
         "Select Provider(s)", providers, default=providers, help="Search or select providers from the dropdown"
@@ -72,6 +73,12 @@ if df is not None:
     df_filtered = df[(df["date"] >= pd.to_datetime(date_range[0])) & 
                      (df["date"] <= pd.to_datetime(date_range[1])) & 
                      (df["author"].isin(selected_providers))]
+
+    # Ensure that sorting works properly and reduce clutter if too many providers
+    top_n = 30  # Limit max providers shown in the chart to 30
+    df_grouped = df_filtered.groupby("author").mean().sort_values(by="turnaround", ascending=False)
+    if len(df_grouped) > top_n:
+        df_grouped = df_grouped.head(top_n)  # Show only top N providers
 
     # Summary Metrics
     st.subheader("📊 Key Metrics")
@@ -83,10 +90,10 @@ if df is not None:
     # Turnaround Time by Provider (Descending Order)
     st.subheader("⏳ Turnaround Time by Provider")
     fig, ax = plt.subplots(figsize=(12, 6))  # Increase figure size
-    df_filtered.groupby("author")["turnaround"].mean().sort_values(ascending=False).plot(kind="bar", ax=ax)
+    df_grouped["turnaround"].sort_values(ascending=False).plot(kind="bar", ax=ax)
     ax.set_ylabel("Minutes")
     ax.set_xlabel("Provider")
-    ax.set_title("Average Turnaround Time per Provider")
+    ax.set_title("Average Turnaround Time per Provider (Top 30)")
     plt.xticks(rotation=45, ha="right")  # Rotate labels for better readability
     st.pyplot(fig)
 
@@ -94,10 +101,10 @@ if df is not None:
     st.subheader("📈 Points per Provider")
     fig, ax = plt.subplots(figsize=(12, 6))  # Increase figure size
     if "points/half day" in df_filtered.columns:
-        df_filtered.groupby("author")["points/half day"].sum().sort_values().plot(kind="bar", ax=ax)
+        df_grouped["points/half day"].sort_values().plot(kind="bar", ax=ax)
         ax.set_ylabel("Points")
         ax.set_xlabel("Provider")
-        ax.set_title("Total Points per Provider")
+        ax.set_title("Total Points per Provider (Top 30)")
         plt.xticks(rotation=45, ha="right")  # Rotate labels for better readability
         st.pyplot(fig)
     else:
@@ -107,16 +114,16 @@ if df is not None:
     st.subheader("🛠️ Procedures per Provider")
     fig, ax = plt.subplots(figsize=(12, 6))  # Increase figure size
     if "procedure/half" in df_filtered.columns:
-        df_filtered.groupby("author")["procedure/half"].sum().sort_values().plot(kind="bar", ax=ax)
+        df_grouped["procedure/half"].sort_values().plot(kind="bar", ax=ax)
         ax.set_ylabel("Procedures")
         ax.set_xlabel("Provider")
-        ax.set_title("Total Procedures per Provider")
+        ax.set_title("Total Procedures per Provider (Top 30)")
         plt.xticks(rotation=45, ha="right")  # Rotate labels for better readability
         st.pyplot(fig)
     else:
         st.warning("⚠️ Column 'Procedure/half' not found in the dataset.")
 
-    # Display Filtered Data as Table
+    # Display Filtered Data as Table (Only for Selected Date Range)
     st.subheader("📄 Detailed Data")
     df_sorted = df_filtered.sort_values(by=["turnaround"], ascending=[False])
     st.dataframe(df_sorted)
