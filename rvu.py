@@ -4,34 +4,11 @@ import os
 import io
 import matplotlib.pyplot as plt
 
-# Page Configuration with Logo
+# Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# Load MILV logo
-st.image("milv.png", width=300)  # Load logo from repository
-
-# Set Custom Colors for Light & Dark Mode
-PRIMARY_COLOR = "#0072CE"  # MILV Blue
-SECONDARY_COLOR = "#002F6C"  # MILV Dark Blue
-TEXT_COLOR = "#FFFFFF" if st.get_option("theme.base") == "dark" else "#333333"
-
-st.markdown(
-    f"""
-    <style>
-        body {{
-            color: {TEXT_COLOR};
-            background-color: #F8F9FA;
-        }}
-        .sidebar .sidebar-content {{
-            background-color: {PRIMARY_COLOR};
-        }}
-        h1, h2, h3, h4, h5, h6 {{
-            color: {SECONDARY_COLOR};
-        }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Sidebar - MILV Logo
+st.sidebar.image("milv.png", width=250)  # Load logo in sidebar
 
 st.title("📊 MILV Daily Productivity")
 
@@ -77,24 +54,37 @@ if uploaded_file:
 
 # If no upload happened, but a previous file exists, load it
 if df is not None:
-    st.info(latest_file_status)
+    st.sidebar.info(latest_file_status)
 
     # Sidebar Filters
-    st.sidebar.subheader("Filter Data")
+    st.sidebar.subheader("📅 Filter Data")
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
     date_range = st.sidebar.date_input("Select Date Range", [latest_date, latest_date], min_value=min_date, max_value=max_date)
 
-    # Hidden Provider Selection with Search
+    # Sidebar - Provider Selection as Dropdown
+    st.sidebar.subheader("👩‍⚕️ Provider Selection")
     providers = df["author"].unique()
-    with st.sidebar.expander("📋 Search & Select Provider(s)"):
-        provider_selection = st.selectbox("Start typing a provider name", ["All Providers"] + list(providers))
-        selected_providers = providers if provider_selection == "All Providers" else st.multiselect("Select multiple providers", providers, default=[provider_selection])
+    all_option = ["ALL Providers"]
+    selected_providers = st.sidebar.multiselect("Select Provider(s)", all_option + list(providers), default=all_option)
+
+    # Handle Selection Logic: If "ALL" is selected, use all providers
+    if "ALL Providers" in selected_providers or not selected_providers:
+        selected_providers = providers  # Select all providers
+    else:
+        selected_providers = selected_providers  # Only selected providers
 
     # Filter data
     df_filtered = df[(df["date"] >= pd.to_datetime(date_range[0])) & 
                      (df["date"] <= pd.to_datetime(date_range[1])) & 
                      (df["author"].isin(selected_providers))]
+
+    # **AGGREGATE METRICS AT THE TOP**
+    st.subheader("📊 Aggregate Measures")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🔢 Total Points", df_filtered["points"].sum())
+    col2.metric("🛠️ Total Procedures", df_filtered["procedure"].sum())
+    col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
 
     # Show Detailed Data at the Top
     st.subheader("📄 Detailed Data Overview")
@@ -114,44 +104,50 @@ if df is not None:
     df_grouped = df_filtered.groupby("author").mean()
     top_n = 30  # Limit provider count in charts
 
-    # Turnaround Time by Provider (Ascending Order)
-    st.subheader("⏳ Turnaround Time by Provider")
-    fig, ax = plt.subplots(figsize=chart_size)
-    df_sorted = df_grouped["turnaround"].sort_values(ascending=True)
-    df_sorted.head(top_n).plot(kind="bar", ax=ax, color=PRIMARY_COLOR)
-    ax.set_ylabel("Minutes")
-    ax.set_xlabel("Provider")
-    ax.set_title("Turnaround Time per Provider (Lowest First)")
-    plt.xticks(rotation=45, ha="right")
-    st.pyplot(fig)
+    if not df_grouped.empty:
+        # Turnaround Time by Provider (Ascending Order)
+        st.subheader("⏳ Turnaround Time by Provider")
+        fig, ax = plt.subplots(figsize=chart_size)
+        df_sorted = df_grouped["turnaround"].sort_values(ascending=True)
+        if not df_sorted.empty:
+            df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#0072CE")
+            ax.set_ylabel("Minutes")
+            ax.set_xlabel("Provider")
+            ax.set_title("Turnaround Time per Provider (Lowest First)")
+            plt.xticks(rotation=45, ha="right")
+            st.pyplot(fig)
+        else:
+            st.warning("⚠️ No turnaround time data available for the selected filters.")
 
-    # Points per Provider (Descending Order)
-    st.subheader("📈 Points per Provider")
-    fig, ax = plt.subplots(figsize=chart_size)
-    if "points/half day" in df_filtered.columns:
-        df_sorted = df_grouped["points/half day"].sort_values(ascending=False)
-        df_sorted.head(top_n).plot(kind="bar", ax=ax, color=SECONDARY_COLOR)
-        ax.set_ylabel("Points")
-        ax.set_xlabel("Provider")
-        ax.set_title("Total Points per Provider (Highest First)")
-        plt.xticks(rotation=45, ha="right")
-        st.pyplot(fig)
-    else:
-        st.warning("⚠️ Column 'Points/half day' not found in the dataset.")
+        # Points per Provider (Descending Order)
+        st.subheader("📈 Points per Provider")
+        fig, ax = plt.subplots(figsize=chart_size)
+        if "points/half day" in df_filtered.columns:
+            df_sorted = df_grouped["points/half day"].sort_values(ascending=False)
+            if not df_sorted.empty:
+                df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#002F6C")
+                ax.set_ylabel("Points")
+                ax.set_xlabel("Provider")
+                ax.set_title("Total Points per Provider (Highest First)")
+                plt.xticks(rotation=45, ha="right")
+                st.pyplot(fig)
+            else:
+                st.warning("⚠️ No points data available for the selected filters.")
 
-    # Procedures per Provider (Descending Order)
-    st.subheader("🛠️ Procedures per Provider")
-    fig, ax = plt.subplots(figsize=chart_size)
-    if "procedure/half" in df_filtered.columns:
-        df_sorted = df_grouped["procedure/half"].sort_values(ascending=False)
-        df_sorted.head(top_n).plot(kind="bar", ax=ax, color=PRIMARY_COLOR)
-        ax.set_ylabel("Procedures")
-        ax.set_xlabel("Provider")
-        ax.set_title("Total Procedures per Provider (Highest First)")
-        plt.xticks(rotation=45, ha="right")
-        st.pyplot(fig)
-    else:
-        st.warning("⚠️ Column 'Procedure/half' not found in the dataset.")
+        # Procedures per Provider (Descending Order)
+        st.subheader("🛠️ Procedures per Provider")
+        fig, ax = plt.subplots(figsize=chart_size)
+        if "procedure/half" in df_filtered.columns:
+            df_sorted = df_grouped["procedure/half"].sort_values(ascending=False)
+            if not df_sorted.empty:
+                df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#0072CE")
+                ax.set_ylabel("Procedures")
+                ax.set_xlabel("Provider")
+                ax.set_title("Total Procedures per Provider (Highest First)")
+                plt.xticks(rotation=45, ha="right")
+                st.pyplot(fig)
+            else:
+                st.warning("⚠️ No procedures data available for the selected filters.")
 
 else:
     st.warning("Please upload an Excel file to start analyzing data.")
