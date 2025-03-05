@@ -25,13 +25,16 @@ def load_data(file_path):
     # Ensure "date" column is properly converted
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
-        df = df.dropna(subset=["date"])  # Remove NaT values
+        df = df.dropna(subset=["date"])  # Remove NaT values in "date"
         df["date"] = df["date"].dt.normalize()  # Normalize to remove time component
 
     # Ensure "turnaround" column is properly converted
     if "turnaround" in df.columns:
         df["turnaround"] = df["turnaround"].astype(str).str.strip()
-        df["turnaround"] = df["turnaround"].replace(["", "nan", "N/A"], pd.NA)  # Handle missing values
+
+        # Convert invalid formats like "1.04:06:07" into a standard format
+        df["turnaround"] = df["turnaround"].apply(lambda x: x.replace(".", ":") if "." in x else x)
+
         df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")  # Convert to timedelta
         df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
         df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
@@ -71,7 +74,7 @@ if df is not None:
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
 
-    # Get date selection from sidebar (returns a Python date object)
+    # Handle date input correctly
     date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
     # Convert Python date object(s) to pandas Timestamp (datetime64[ns])
