@@ -59,7 +59,15 @@ if df is not None:
     st.sidebar.subheader("📅 Filter Data")
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
-    date_range = st.sidebar.date_input("Select Date Range", [latest_date, latest_date], min_value=min_date, max_value=max_date)
+    
+    # Ensure correct handling of single-date selection
+    date_range = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
+
+    # If only one date is selected, convert it into a range
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        start_date = end_date = date_range  # Single date selected
 
     # Sidebar - Provider Selection with Improved Logic
     st.sidebar.subheader("👩‍⚕️ Provider Selection")
@@ -77,13 +85,15 @@ if df is not None:
 
     # Filter data
     df_filtered = df[
-        (df["date"] >= pd.to_datetime(date_range[0])) & 
-        (df["date"] <= pd.to_datetime(date_range[1])) & 
+        (df["date"] >= pd.to_datetime(start_date)) & 
+        (df["date"] <= pd.to_datetime(end_date)) & 
         (df["author"].isin(selected_providers))
     ]
 
     # **AGGREGATE METRICS AT THE TOP**
-    st.subheader("📊 Aggregate Measures")
+    st.subheader(f"📊 Aggregate Measures for {start_date.strftime('%Y-%m-%d')}" if start_date == end_date else 
+                 f"📊 Aggregate Measures from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+
     col1, col2, col3 = st.columns(3)
     col1.metric("🔢 Total Points", df_filtered["points"].sum())
     col2.metric("🛠️ Total Procedures", df_filtered["procedure"].sum())
@@ -96,7 +106,7 @@ if df is not None:
 
     # Download Data
     csv = df_sorted.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download CSV", csv, f"MILV_Daily_Productivity_{date_range[0]}_to_{date_range[1]}.csv", "text/csv")
+    st.download_button("📥 Download CSV", csv, f"MILV_Daily_Productivity_{start_date}_to_{end_date}.csv", "text/csv")
 
     # Visualization Controls
     st.subheader("📊 Visualizations")
@@ -122,31 +132,31 @@ if df is not None:
         else:
             st.warning("⚠️ No turnaround time data available for the selected filters.")
 
-        # Points per Provider (Descending Order)
-        st.subheader("📈 Points per Provider")
+        # Points per Provider (Descending Order) - Now Clearly Labeled as "Points per Half Day"
+        st.subheader("📈 Points per Provider (Per Half Day)")
         fig, ax = plt.subplots(figsize=chart_size)
         if "points/half day" in df_filtered.columns:
             df_sorted = df_grouped["points/half day"].sort_values(ascending=False)
             if not df_sorted.empty:
                 df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#002F6C")
-                ax.set_ylabel("Points")
+                ax.set_ylabel("Points per Half Day")
                 ax.set_xlabel("Provider")
-                ax.set_title("Total Points per Provider (Highest First)")
+                ax.set_title("Total Points per Provider (Per Half Day)")
                 plt.xticks(rotation=45, ha="right")
                 st.pyplot(fig)
             else:
                 st.warning("⚠️ No points data available for the selected filters.")
 
-        # Procedures per Provider (Descending Order)
-        st.subheader("🛠️ Procedures per Provider")
+        # Procedures per Provider (Descending Order) - Now Clearly Labeled as "Procedures per Half Day"
+        st.subheader("🛠️ Procedures per Provider (Per Half Day)")
         fig, ax = plt.subplots(figsize=chart_size)
         if "procedure/half" in df_filtered.columns:
             df_sorted = df_grouped["procedure/half"].sort_values(ascending=False)
             if not df_sorted.empty:
                 df_sorted.head(top_n).plot(kind="bar", ax=ax, color="#0072CE")
-                ax.set_ylabel("Procedures")
+                ax.set_ylabel("Procedures per Half Day")
                 ax.set_xlabel("Provider")
-                ax.set_title("Total Procedures per Provider (Highest First)")
+                ax.set_title("Total Procedures per Provider (Per Half Day)")
                 plt.xticks(rotation=45, ha="right")
                 st.pyplot(fig)
             else:
