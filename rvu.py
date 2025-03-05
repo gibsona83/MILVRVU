@@ -25,7 +25,10 @@ def convert_turnaround(value):
         if pd.isna(value) or value is None:
             return None  # Handle missing values safely
 
-        value = str(value).strip()  # Ensure value is a string
+        value = str(value).strip()  # Ensure value is treated as a string
+
+        # Debug: Print raw value to inspect
+        st.write(f"🔍 Debug: Turnaround Time Value → `{value}` (Type: {type(value)})")
 
         # Try parsing as HH:MM:SS
         try:
@@ -33,7 +36,7 @@ def convert_turnaround(value):
             total_minutes = t.hour * 60 + t.minute + t.second / 60  # Convert to total minutes
             return round(total_minutes, 2)  # Return rounded value
         except ValueError:
-            st.warning(f"⚠️ Unexpected format in Turnaround Time: {value}")
+            st.warning(f"⚠️ Unexpected format in Turnaround Time: `{value}`")
             return None
 
     except Exception as e:
@@ -79,8 +82,12 @@ def load_data(file):
         # Convert date safely
         rvu_df['Date'] = pd.to_datetime(rvu_df['Date'], errors='coerce').dt.date
 
-        # Convert turnaround time if column exists
+        # Debugging: Print the first few values before conversion
         if "Turnaround Time" in rvu_df.columns:
+            st.write("🔍 Debug: First 5 Turnaround Time values before conversion:")
+            st.write(rvu_df["Turnaround Time"].head())
+
+            # Convert Turnaround Time
             rvu_df["Turnaround Time"] = rvu_df["Turnaround Time"].astype(str).apply(convert_turnaround)
 
         # Normalize provider names
