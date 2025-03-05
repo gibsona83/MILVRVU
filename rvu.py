@@ -57,22 +57,26 @@ if uploaded_file:
 if df is not None:
     st.info(latest_file_status)
 
-    # Default to the latest date
-    latest_date = df["date"].max()
+    # Sidebar - Date Range Selection (New Feature)
     st.sidebar.subheader("Filter Data")
-    selected_date = st.sidebar.date_input("Select Date", latest_date)
+    min_date, max_date = df["date"].min(), df["date"].max()
+    date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
 
-    # Sidebar - Provider Selection
+    # Sidebar - Searchable Provider Dropdown (New Feature)
     providers = df["author"].unique()
-    selected_providers = st.sidebar.multiselect("Select Provider(s)", providers, default=providers)
+    selected_providers = st.sidebar.multiselect(
+        "Select Provider(s)", providers, default=providers, help="Search or select providers from the dropdown"
+    )
 
-    # Filter data for selected date and providers
-    df_filtered = df[(df["date"] == pd.to_datetime(selected_date)) & (df["author"].isin(selected_providers))]
+    # Filter data for selected date range and providers
+    df_filtered = df[(df["date"] >= pd.to_datetime(date_range[0])) & 
+                     (df["date"] <= pd.to_datetime(date_range[1])) & 
+                     (df["author"].isin(selected_providers))]
 
     # Summary Metrics
     st.subheader("📊 Key Metrics")
     col1, col2, col3 = st.columns(3)
-    col1.metric("📅 Selected Date", selected_date.strftime("%Y-%m-%d"))
+    col1.metric("📅 Date Range", f"{date_range[0]} to {date_range[1]}")
     col2.metric("🔢 Total Points", df_filtered["points"].sum())
     col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
 
@@ -119,7 +123,7 @@ if df is not None:
 
     # Download Filtered Data as CSV
     csv = df_sorted.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download CSV", csv, f"MILV_Daily_Productivity_{selected_date}.csv", "text/csv")
+    st.download_button("📥 Download CSV", csv, f"MILV_Daily_Productivity_{date_range[0]}_to_{date_range[1]}.csv", "text/csv")
 
 else:
     st.warning("Please upload an Excel file to start analyzing data.")
