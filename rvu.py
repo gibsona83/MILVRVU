@@ -13,20 +13,23 @@ st.title("📊 MILV RVU Dashboard")
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
 
 def load_data(file_path):
-    """Loads data from an Excel file and ensures Turnaround values are valid."""
+    """Loads data from an Excel file and ensures columns are correctly formatted."""
     xls = pd.ExcelFile(file_path)
     df = xls.parse(xls.sheet_names[0])
 
+    # Standardize column names (strip spaces, lowercase)
+    df.columns = df.columns.str.strip().str.lower()
+
     # Convert "Date" column to datetime
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     # Handle Turnaround column safely
-    df["Turnaround"] = df["Turnaround"].astype(str).str.strip()  # Remove spaces
-    df["Turnaround"] = pd.to_timedelta(df["Turnaround"], errors="coerce")  # Convert to timedelta
-    df["Turnaround"] = df["Turnaround"].dt.total_seconds() / 60  # Convert to minutes
+    df["turnaround"] = df["turnaround"].astype(str).str.strip()  # Remove spaces
+    df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")  # Convert to timedelta
+    df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
 
     # Fill NaN values with 0 for Turnaround (if necessary)
-    df["Turnaround"] = df["Turnaround"].fillna(0)
+    df["turnaround"] = df["turnaround"].fillna(0)
 
     return df
 
@@ -55,23 +58,23 @@ if df is not None:
     st.info(latest_file_status)
 
     # Get the latest date
-    latest_date = df["Date"].max()
+    latest_date = df["date"].max()
     selected_date = st.sidebar.date_input("Select Date", latest_date)
 
     # Filter data for selected date
-    df_filtered = df[df["Date"] == pd.to_datetime(selected_date)]
+    df_filtered = df[df["date"] == pd.to_datetime(selected_date)]
 
     # Summary Metrics
     st.subheader("📊 Key Metrics")
     col1, col2, col3 = st.columns(3)
     col1.metric("📅 Latest Date", latest_date.strftime("%Y-%m-%d"))
-    col2.metric("🔢 Total Points", df_filtered["Points"].sum())
-    col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["Turnaround"].mean(), 2))
+    col2.metric("🔢 Total Points", df_filtered["points"].sum())
+    col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
 
     # Turnaround Time Trends
     st.subheader("⏳ Turnaround Time Trends")
     fig, ax = plt.subplots()
-    df.groupby("Date")["Turnaround"].mean().plot(ax=ax, marker="o")
+    df.groupby("date")["turnaround"].mean().plot(ax=ax, marker="o")
     ax.set_ylabel("Minutes")
     ax.set_xlabel("Date")
     ax.set_title("Average Turnaround Time Over Time")
@@ -80,20 +83,26 @@ if df is not None:
     # Points per Half-Day
     st.subheader("📈 Points per Half-Day")
     fig, ax = plt.subplots()
-    df_filtered.groupby("Shift")["Points/half day"].sum().plot(kind="bar", ax=ax)
-    ax.set_ylabel("Points")
-    ax.set_xlabel("Shift")
-    ax.set_title("Points per Half-Day by Shift")
-    st.pyplot(fig)
+    if "points/half day" in df_filtered.columns:
+        df_filtered.groupby("shift")["points/half day"].sum().plot(kind="bar", ax=ax)
+        ax.set_ylabel("Points")
+        ax.set_xlabel("Shift")
+        ax.set_title("Points per Half-Day by Shift")
+        st.pyplot(fig)
+    else:
+        st.warning("⚠️ Column 'Points/half day' not found in the dataset.")
 
     # Procedures per Half-Day
     st.subheader("🛠️ Procedures per Half-Day")
     fig, ax = plt.subplots()
-    df_filtered.groupby("Shift")["Procedure/half day"].sum().plot(kind="bar", ax=ax)
-    ax.set_ylabel("Procedures")
-    ax.set_xlabel("Shift")
-    ax.set_title("Procedures per Half-Day by Shift")
-    st.pyplot(fig)
+    if "procedure/half day" in df_filtered.columns:
+        df_filtered.groupby("shift")["procedure/half day"].sum().plot(kind="bar", ax=ax)
+        ax.set_ylabel("Procedures")
+        ax.set_xlabel("Shift")
+        ax.set_title("Procedures per Half-Day by Shift")
+        st.pyplot(fig)
+    else:
+        st.warning("⚠️ Column 'Procedure/half day' not found in the dataset.")
 
 else:
     st.warning("Please upload an Excel file to start analyzing data.")
