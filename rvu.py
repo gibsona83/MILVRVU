@@ -57,49 +57,55 @@ if uploaded_file:
 if df is not None:
     st.info(latest_file_status)
 
-    # Get the latest date
-    latest_date = df["date"].max()
-    selected_date = st.sidebar.date_input("Select Date", latest_date)
+    # Sidebar - Date Range Selection
+    min_date, max_date = df["date"].min(), df["date"].max()
+    date_range = st.sidebar.date_input("Select Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
 
-    # Filter data for selected date
-    df_filtered = df[df["date"] == pd.to_datetime(selected_date)]
+    # Sidebar - Provider Selection
+    providers = df["author"].unique()
+    selected_providers = st.sidebar.multiselect("Select Provider(s)", providers, default=providers)
+
+    # Filter data by selected date range and providers
+    df_filtered = df[(df["date"] >= pd.to_datetime(date_range[0])) & 
+                     (df["date"] <= pd.to_datetime(date_range[1])) & 
+                     (df["author"].isin(selected_providers))]
 
     # Summary Metrics
     st.subheader("📊 Key Metrics")
     col1, col2, col3 = st.columns(3)
-    col1.metric("📅 Latest Date", latest_date.strftime("%Y-%m-%d"))
+    col1.metric("📅 Date Range", f"{date_range[0]} to {date_range[1]}")
     col2.metric("🔢 Total Points", df_filtered["points"].sum())
     col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
 
-    # Turnaround Time Trends
-    st.subheader("⏳ Turnaround Time Trends")
+    # Turnaround Time by Provider
+    st.subheader("⏳ Turnaround Time by Provider")
     fig, ax = plt.subplots()
-    df.groupby("date")["turnaround"].mean().plot(ax=ax, marker="o")
+    df_filtered.groupby("author")["turnaround"].mean().sort_values().plot(kind="bar", ax=ax)
     ax.set_ylabel("Minutes")
-    ax.set_xlabel("Date")
-    ax.set_title("Average Turnaround Time Over Time")
+    ax.set_xlabel("Provider")
+    ax.set_title("Average Turnaround Time per Provider")
     st.pyplot(fig)
 
-    # Points per Half-Day
-    st.subheader("📈 Points per Half-Day")
+    # Points per Provider
+    st.subheader("📈 Points per Provider")
     fig, ax = plt.subplots()
     if "points/half day" in df_filtered.columns:
-        df_filtered.groupby("shift")["points/half day"].sum().plot(kind="bar", ax=ax)
+        df_filtered.groupby("author")["points/half day"].sum().sort_values().plot(kind="bar", ax=ax)
         ax.set_ylabel("Points")
-        ax.set_xlabel("Shift")
-        ax.set_title("Points per Half-Day by Shift")
+        ax.set_xlabel("Provider")
+        ax.set_title("Total Points per Provider")
         st.pyplot(fig)
     else:
         st.warning("⚠️ Column 'Points/half day' not found in the dataset.")
 
-    # Procedures per Half-Day (FIXED COLUMN NAME)
-    st.subheader("🛠️ Procedures per Half-Day")
+    # Procedures per Provider
+    st.subheader("🛠️ Procedures per Provider")
     fig, ax = plt.subplots()
     if "procedure/half" in df_filtered.columns:  # Corrected column name
-        df_filtered.groupby("shift")["procedure/half"].sum().plot(kind="bar", ax=ax)
+        df_filtered.groupby("author")["procedure/half"].sum().sort_values().plot(kind="bar", ax=ax)
         ax.set_ylabel("Procedures")
-        ax.set_xlabel("Shift")
-        ax.set_title("Procedures per Half-Day by Shift")
+        ax.set_xlabel("Provider")
+        ax.set_title("Total Procedures per Provider")
         st.pyplot(fig)
     else:
         st.warning("⚠️ Column 'Procedure/half' not found in the dataset.")
