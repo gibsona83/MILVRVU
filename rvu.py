@@ -63,12 +63,15 @@ if df is not None:
     min_date, max_date = df["date"].min(), latest_date
     date_range = st.sidebar.date_input("Select Date Range", [latest_date, latest_date], min_value=min_date, max_value=max_date)
 
-    # Sidebar - Provider Selection (Hidden by Default)
+    # Sidebar - Hidden Provider Selection with Search
     providers = df["author"].unique()
-    with st.sidebar.expander("📋 Select Provider(s)"):
-        selected_providers = st.multiselect(
-            "Choose Provider(s)", providers, default=providers, help="De-select or filter providers as needed."
-        )
+    with st.sidebar.expander("📋 Search & Select Provider(s)"):
+        provider_selection = st.selectbox("Start typing a provider name", ["All Providers"] + list(providers))
+        
+        if provider_selection == "All Providers":
+            selected_providers = providers  # Select all providers by default
+        else:
+            selected_providers = st.multiselect("Select multiple providers", providers, default=[provider_selection])
 
     # Filter data for selected date range and providers
     df_filtered = df[(df["date"] >= pd.to_datetime(date_range[0])) & 
