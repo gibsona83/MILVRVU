@@ -25,8 +25,11 @@ def load_data(file_path):
     # Convert "Date" column to datetime
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
-    # Handle Turnaround column safely
-    df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce").dt.total_seconds() / 60  # Convert to minutes
+    # Clean and convert "Turnaround" column safely
+    df["turnaround"] = df["turnaround"].astype(str).str.strip()  # Ensure it's a string
+    df["turnaround"] = df["turnaround"].replace(["", "nan", "N/A"], pd.NA)  # Handle missing values
+    df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce")  # Convert to timedelta
+    df["turnaround"] = df["turnaround"].dt.total_seconds() / 60  # Convert to minutes
     df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
 
     return df
@@ -114,7 +117,7 @@ if df is not None:
 
     if not df_grouped.empty:
         # Turnaround Time by Provider (Ascending Order)
-        st.subheader("⏳ Turnaround Time by Provider")
+        st.subheader("⏳ Turnaround Time per Provider")
         fig, ax = plt.subplots(figsize=chart_size)
         df_sorted = df_grouped["turnaround"].sort_values(ascending=True)
         if not df_sorted.empty:
