@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-from thefuzz import process  # Fuzzy matching for provider names
+from rapidfuzz import process  # More efficient than 'thefuzz' in cloud environments
 
-# Caching for performance
+# Caching to improve performance
 @st.cache_data
 def load_roster():
     """Loads MILV Roster from CSV file."""
