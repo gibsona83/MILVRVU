@@ -27,19 +27,17 @@ def convert_turnaround(value):
             return None  # Handle missing values safely
 
         value = str(value).strip()  # Ensure value is treated as a string
-        
-        # Try using pandas to parse as time format
+
+        # Try parsing as HH:MM:SS
         try:
-            t = pd.to_datetime(value, format='%H:%M:%S').time()
+            t = datetime.datetime.strptime(value, "%H:%M:%S").time()
             total_minutes = t.hour * 60 + t.minute + t.second / 60  # Convert to total minutes
             return round(total_minutes, 2)  # Return rounded value
         except ValueError:
-            st.warning(f"⚠️ Unexpected format in Turnaround Time: `{value}`")
-            return None
+            return None  # Ignore invalid formats
 
     except Exception as e:
-        st.error(f"❌ Error converting turnaround time ({value}): {e}")
-        return None
+        return None  # Return None on any unexpected error
 
 def fuzzy_match_providers(rvu_df, roster_df):
     """Performs fuzzy matching to align provider names."""
