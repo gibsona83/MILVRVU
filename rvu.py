@@ -24,9 +24,9 @@ def load_data(file_path):
 
     # Ensure "date" column is properly converted
     if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-        df = df.dropna(subset=["date"])  # Remove NaT values in "date"
-        df["date"] = df["date"].dt.normalize()  # Normalize to remove time component
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")  # Convert to datetime
+        df = df.dropna(subset=["date"])  # Drop NaT values
+        df["date"] = df["date"].astype("datetime64[ns]")  # Explicit conversion
 
     return df
 
@@ -60,6 +60,7 @@ if df is not None:
     st.sidebar.subheader("📅 Filter Data")
     df["date"] = pd.to_datetime(df["date"], errors="coerce")  # Ensure valid datetime
     df = df.dropna(subset=["date"])  # Remove any remaining NaT values
+    df["date"] = df["date"].astype("datetime64[ns]")  # Ensure dtype is correct
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
 
@@ -68,25 +69,12 @@ if df is not None:
 
     # Convert date selection to pandas Timestamps
     if isinstance(date_selection, list) and len(date_selection) == 2:
-        start_date, end_date = pd.to_datetime(date_selection[0]), pd.to_datetime(date_selection[1])
+        start_date, end_date = pd.Timestamp(date_selection[0]), pd.Timestamp(date_selection[1])
     else:
-        start_date = end_date = pd.to_datetime(date_selection)  # Single date selected
+        start_date = end_date = pd.Timestamp(date_selection)  # Single date selected
 
-    # Ensure df["date"] is still a datetime object
-    if df["date"].dtype != "datetime64[ns]":
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    # Sidebar - Provider Selection
-    st.sidebar.subheader("👩‍⚕️ Provider Selection")
-    providers = df["author"].unique().tolist()
-    all_option = "ALL Providers"
-
-    # Ensure "ALL Providers" is always the first option
-    selected_providers = st.sidebar.multiselect("Select Provider(s)", [all_option] + providers, default=[all_option])
-
-    # Handle Selection Logic
-    if all_option in selected_providers or not selected_providers:
-        selected_providers = providers  # Select all providers
+    # Ensure all data types match before filtering
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").astype("datetime64[ns]")
 
     # Debugging: Print data types before filtering
     st.sidebar.text(f"start_date type: {type(start_date)}")
