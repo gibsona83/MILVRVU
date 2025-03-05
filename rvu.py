@@ -22,20 +22,10 @@ def load_data(file_path):
     # Standardize column names (strip spaces, lowercase)
     df.columns = df.columns.str.strip().str.lower()
 
-    # Convert "date" column
+    # Convert "date" column safely
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
         df = df.dropna(subset=["date"])  # Drop invalid dates
-
-    # Convert "turnaround" column safely
-    if "turnaround" in df.columns:
-        df["turnaround"] = df["turnaround"].astype(str).str.strip()
-
-        # Fix incorrect time formats (like "1.04:06:07" → "1:04:06:07")
-        df["turnaround"] = df["turnaround"].apply(lambda x: x.replace(".", ":") if "." in x else x)
-
-        df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce").dt.total_seconds() / 60
-        df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
 
     return df
 
@@ -76,11 +66,13 @@ if df is not None:
     # Handle date selection correctly
     date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
-    # Convert selection into timestamps
+    # Fixing the issue with single vs. multi-date selection
     if isinstance(date_selection, list) and len(date_selection) == 2:
         start_date, end_date = pd.Timestamp(date_selection[0]), pd.Timestamp(date_selection[1])
+    elif isinstance(date_selection, list) and len(date_selection) == 1:
+        start_date = end_date = pd.Timestamp(date_selection[0])  # Single date selected
     else:
-        start_date = end_date = pd.Timestamp(date_selection)  # Handle single-date selection
+        start_date = end_date = pd.Timestamp(date_selection)  # Handle non-list case (backup)
 
     # Ensure all data types match before filtering
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
