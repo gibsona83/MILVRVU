@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import traceback
+import re
 from rapidfuzz import process  # Using rapidfuzz for fuzzy matching
 
 # Debugging: Show that the script has started
@@ -19,11 +20,30 @@ def load_roster():
         return None
 
 def convert_turnaround(value):
-    """Converts turnaround time to a numeric format."""
+    """Converts turnaround time from HH:MM:SS format to total minutes."""
     try:
-        return float(value.replace(" hrs", ""))
+        if isinstance(value, str):  # Ensure the value is a string
+            value = value.strip()   # Remove any extra spaces
+            
+            # Check if the value is in HH:MM:SS format
+            match = re.match(r"(\d{1,2}):(\d{2}):(\d{2})", value)
+            if match:
+                h, m, s = map(int, match.groups())  # Convert to hours, minutes, seconds
+                total_minutes = h * 60 + m + s / 60  # Convert to total minutes
+                return round(total_minutes, 2)  # Return rounded value
+            
+            # If it's an unexpected string, log it but return None
+            st.warning(f"⚠️ Unexpected format in Turnaround Time: {value}")
+            return None
+
+        elif isinstance(value, (int, float)):  # If it's already a number, return as is
+            return float(value)
+
+        else:
+            return None  # If it's an unexpected format, return None
+
     except Exception as e:
-        st.error(f"❌ Error converting turnaround time: {e}")
+        st.error(f"❌ Error converting turnaround time ({value}): {e}")
         return None
 
 def fuzzy_match_providers(rvu_df, roster_df):
@@ -102,9 +122,15 @@ st.title("RVU Daily Dashboard")
 
 uploaded_file = st.file_uploader("Upload the latest Daily RVU file", type=["xlsx"])
 if uploaded_file:
-    rvu_data = load_data(uploaded_file)
-    if rvu_data is not None:
-        st.write("✅ Data successfully loaded!")
-        st.dataframe(rvu_data.head())  # Display first few rows
-    else:
-        st.error("❌ Failed to load data.")
+    st.write("📂 File uploaded:", uploaded_file.name)  # Show uploaded filename
+    
+    try:
+        rvu_data = load_data(uploaded_file)
+        if rvu_data is not None:
+            st.write("✅ Data successfully loaded!")
+            st.dataframe(rvu_data.head())  # Display first few rows
+        else:
+            st.error("❌ Failed to load data. Data returned is None.")
+    except Exception as e:
+        st.error(f"❌ Critical error in file processing: {e}")
+        st.write(traceback.format_exc())  # Print detailed error traceback
