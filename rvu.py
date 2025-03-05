@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import traceback
-import re
+import datetime
 from rapidfuzz import process  # Using rapidfuzz for fuzzy matching
 
 # Debugging: Show that the script has started
@@ -22,19 +22,17 @@ def load_roster():
 def convert_turnaround(value):
     """Converts turnaround time from HH:MM:SS format to total minutes."""
     try:
-        if isinstance(value, str):  # Ensure the value is a string
-            value = value.strip()   # Remove any extra spaces
+        if isinstance(value, str):
+            value = value.strip()  # Remove any extra spaces
             
-            # Check if the value is in HH:MM:SS format
-            match = re.match(r"(\d{1,2}):(\d{2}):(\d{2})", value)
-            if match:
-                h, m, s = map(int, match.groups())  # Convert to hours, minutes, seconds
-                total_minutes = h * 60 + m + s / 60  # Convert to total minutes
+            # Try parsing as HH:MM:SS
+            try:
+                t = datetime.datetime.strptime(value, "%H:%M:%S").time()
+                total_minutes = t.hour * 60 + t.minute + t.second / 60  # Convert to total minutes
                 return round(total_minutes, 2)  # Return rounded value
-            
-            # If it's an unexpected string, log it but return None
-            st.warning(f"⚠️ Unexpected format in Turnaround Time: {value}")
-            return None
+            except ValueError:
+                st.warning(f"⚠️ Unexpected format in Turnaround Time: {value}")
+                return None
 
         elif isinstance(value, (int, float)):  # If it's already a number, return as is
             return float(value)
