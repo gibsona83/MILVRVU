@@ -19,10 +19,10 @@ def load_data(file_path):
     xls = pd.ExcelFile(file_path)
     df = xls.parse(xls.sheet_names[0])
 
-    # Standardize column names (strip spaces, lowercase)
+    # Standardize column names
     df.columns = df.columns.str.strip().str.lower()
 
-    # Convert "date" column safely
+    # Convert "date" column
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
         df = df.dropna(subset=["date"])  # Drop invalid dates
@@ -57,7 +57,7 @@ if df is not None:
 
     # Sidebar Filters
     st.sidebar.subheader("📅 Filter Data")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()  # Normalize dates
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
     df = df.dropna(subset=["date"])  # Ensure no NaT values
 
     latest_date = df["date"].max()
@@ -66,15 +66,16 @@ if df is not None:
     # Handle date selection correctly
     date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
-    # Fixing the issue with single vs. multi-date selection
-    if isinstance(date_selection, list) and len(date_selection) == 2:
-        start_date, end_date = pd.Timestamp(date_selection[0]), pd.Timestamp(date_selection[1])
-    elif isinstance(date_selection, list) and len(date_selection) == 1:
-        start_date = end_date = pd.Timestamp(date_selection[0])  # Single date selected
+    # **Fix: Ensure proper conversion of date selection**
+    if isinstance(date_selection, tuple) or isinstance(date_selection, list):
+        # Two dates selected (range)
+        start_date = pd.to_datetime(date_selection[0])
+        end_date = pd.to_datetime(date_selection[1])
     else:
-        start_date = end_date = pd.Timestamp(date_selection)  # Handle non-list case (backup)
+        # Single date selected
+        start_date = end_date = pd.to_datetime(date_selection)
 
-    # Ensure all data types match before filtering
+    # Convert `df["date"]` to ensure it's datetime64[ns]
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     # Sidebar - Provider Selection
