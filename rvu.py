@@ -15,22 +15,31 @@ st.title("📊 MILV Daily Productivity")
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
 
 def load_data(file_path):
-    """Loads data from an Excel file and ensures columns are correctly formatted."""
+    """Loads data from an Excel file and ensures correct formatting."""
     xls = pd.ExcelFile(file_path)
     df = xls.parse(xls.sheet_names[0])
 
     # Standardize column names (strip spaces, lowercase)
     df.columns = df.columns.str.strip().str.lower()
 
-    # Ensure "date" column is properly converted
+    # Convert "date" column
     if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")  # Convert to datetime
-        df = df.dropna(subset=["date"])  # Drop NaT values
-        df["date"] = df["date"].astype("datetime64[ns]")  # Explicit conversion
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+        df = df.dropna(subset=["date"])  # Drop invalid dates
+
+    # Convert "turnaround" column safely
+    if "turnaround" in df.columns:
+        df["turnaround"] = df["turnaround"].astype(str).str.strip()
+
+        # Fix incorrect time formats (like "1.04:06:07" → "1:04:06:07")
+        df["turnaround"] = df["turnaround"].apply(lambda x: x.replace(".", ":") if "." in x else x)
+
+        df["turnaround"] = pd.to_timedelta(df["turnaround"], errors="coerce").dt.total_seconds() / 60
+        df["turnaround"] = df["turnaround"].fillna(0)  # Replace NaN with 0
 
     return df
 
-# Check if a stored file exists
+# Load last uploaded file if exists
 if os.path.exists(FILE_STORAGE_PATH):
     df = load_data(FILE_STORAGE_PATH)
     latest_file_status = "✅ Using last uploaded file."
@@ -47,7 +56,7 @@ if uploaded_file:
     df = load_data(FILE_STORAGE_PATH)
     st.success("✅ File uploaded successfully! Using new file.")
 
-# If no upload happened, but a previous file exists, load it
+# If no upload, but previous file exists, load it
 if df is not None:
     st.sidebar.info(latest_file_status)
 
@@ -58,30 +67,41 @@ if df is not None:
 
     # Sidebar Filters
     st.sidebar.subheader("📅 Filter Data")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")  # Ensure valid datetime
-    df = df.dropna(subset=["date"])  # Remove any remaining NaT values
-    df["date"] = df["date"].astype("datetime64[ns]")  # Ensure dtype is correct
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()  # Normalize dates
+    df = df.dropna(subset=["date"])  # Ensure no NaT values
+
     latest_date = df["date"].max()
     min_date, max_date = df["date"].min(), latest_date
 
-    # Handle date input correctly
+    # Handle date selection correctly
     date_selection = st.sidebar.date_input("Select Date Range", [latest_date], min_value=min_date, max_value=max_date)
 
-    # Convert date selection to pandas Timestamps
+    # Convert selection into timestamps
     if isinstance(date_selection, list) and len(date_selection) == 2:
         start_date, end_date = pd.Timestamp(date_selection[0]), pd.Timestamp(date_selection[1])
     else:
-        start_date = end_date = pd.Timestamp(date_selection)  # Single date selected
+        start_date = end_date = pd.Timestamp(date_selection)  # Handle single-date selection
 
     # Ensure all data types match before filtering
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").astype("datetime64[ns]")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
-    # Debugging: Print data types before filtering
+    # Sidebar - Provider Selection
+    st.sidebar.subheader("👩‍⚕️ Provider Selection")
+    providers = df["author"].unique().tolist()
+    all_option = "ALL Providers"
+
+    selected_providers = st.sidebar.multiselect("Select Provider(s)", [all_option] + providers, default=[all_option])
+
+    # Selection logic
+    if all_option in selected_providers or not selected_providers:
+        selected_providers = providers  # Select all providers
+
+    # Debugging: Print types before filtering
     st.sidebar.text(f"start_date type: {type(start_date)}")
     st.sidebar.text(f"end_date type: {type(end_date)}")
-    st.sidebar.text(f"df['date'] type: {df['date'].dtype}")
+    st.sidebar.text(f"df['date'] dtype: {df['date'].dtype}")
 
-    # Filter data, ensuring valid datetime comparison
+    # Filtering data
     df_filtered = df[
         (df["date"] >= start_date) & 
         (df["date"] <= end_date) & 
@@ -97,9 +117,9 @@ if df is not None:
     col2.metric("🛠️ Total Procedures", df_filtered["procedure"].sum())
     col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
 
-    # Show Detailed Data at the Top
+    # Show Detailed Data
     st.subheader("📄 Detailed Data Overview")
-    df_sorted = df_filtered.sort_values(by=["turnaround"], ascending=[True])  # TAT ascending
+    df_sorted = df_filtered.sort_values(by=["turnaround"], ascending=[True])
     st.dataframe(df_sorted)
 
     # Download Data
