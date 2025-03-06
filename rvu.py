@@ -20,8 +20,8 @@ def load_data(file_path):
         df = xls.parse(xls.sheet_names[0])
         
         # Clean and standardize column names
-        df.columns = df.columns.str.strip().str.lower()  # Normalize column names
-        col_map = {col: col for col in df.columns}  # Store original names
+        df.columns = df.columns.str.strip().str.lower()
+        col_map = {col: col for col in df.columns}
 
         # Validate required columns
         missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
@@ -141,6 +141,11 @@ def main():
         df_latest = df[df["date"] == pd.Timestamp(max_date)]
 
         if not df_latest.empty:
+            # Searchable Table
+            search_query = st.text_input("Search Providers:")
+            if search_query:
+                df_latest = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)]
+
             st.dataframe(df_latest, use_container_width=True)
 
             st.subheader("📊 Performance")
@@ -185,7 +190,12 @@ def main():
         else:
             st.warning("⚠️ No valid metrics available for trend analysis.")
 
+        # Searchable Table
         st.subheader("🔍 Filtered Data")
+        search_query = st.text_input("Search Providers in Trends:")
+        if search_query:
+            df_range = df_range[df_range["author"].str.contains(search_query, case=False, na=False)]
+        
         st.dataframe(df_range, use_container_width=True)
 
 if __name__ == "__main__":
