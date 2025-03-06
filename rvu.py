@@ -9,19 +9,22 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Constants
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
+IMAGE_PATH = "milv.png"
+IMAGE_URL = "https://raw.githubusercontent.com/gibsaona83/MILVRVU/main/milv.png"
+
 REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
                     "points/half day", "procedure/half"}
 
 # ---- Ensure milv.png Exists ----
-image_url = "https://raw.githubusercontent.com/gibsaona83/milvrvu/main/milv.png"
-image_path = "milv.png"
-
-try:
-    response = requests.get(image_url)
-    with open(image_path, "wb") as f:
-        f.write(response.content)
-except Exception as e:
-    st.warning(f"⚠️ Could not download the image: {str(e)}")
+if not os.path.exists(IMAGE_PATH):
+    try:
+        response = requests.get(IMAGE_URL, timeout=10)
+        if response.status_code == 200 and "image" in response.headers["Content-Type"]:
+            with open(IMAGE_PATH, "wb") as f:
+                f.write(response.content)
+    except Exception as e:
+        st.warning(f"⚠️ Could not download the image: {str(e)}")
+        IMAGE_PATH = None  # Prevents using a broken image
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
@@ -134,7 +137,7 @@ def create_trend_chart(df, date_col, metrics):
     fig.update_layout(
         xaxis=dict(
             tickformat="%b %d",
-            rangeslider=dict(visible=False),  # Keep slider off to avoid duplication
+            rangeslider=dict(visible=False),
             gridcolor='#F0F2F6'
         ),
         yaxis=dict(
@@ -149,7 +152,11 @@ def create_trend_chart(df, date_col, metrics):
 
 # ---- Main Application ----
 def main():
-    st.sidebar.image(image_path, width=250)
+    if IMAGE_PATH:
+        st.sidebar.image(IMAGE_PATH, width=250)
+    else:
+        st.sidebar.markdown("**📌 MILV Dashboard**")
+
     uploaded_file = st.sidebar.file_uploader("Upload RVU File", type=["xlsx"])
     
     if uploaded_file:
@@ -192,8 +199,6 @@ def main():
                 df_prov = df_prov[df_prov["author"].str.contains(search_prov, case=False, na=False)]
             
             st.dataframe(df_prov, use_container_width=True)
-            st.metric("Avg Points/Half Day", f"{df_prov['points/half day'].mean():.2f}")
-            st.metric("Avg Procedures/Half Day", f"{df_prov['procedure/half'].mean():.2f}")
 
     with tab3:
         st.subheader("📈 Trends Over Time")
