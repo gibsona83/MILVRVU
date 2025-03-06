@@ -71,7 +71,8 @@ def create_performance_chart(df, metric_col, author_col, title):
         xaxis_title=metric_col,
         yaxis_title="Provider",
         hovermode='y unified',
-        coloraxis_colorbar=dict(title=metric_col)
+        coloraxis_colorbar=dict(title=metric_col),  # Added missing comma here
+    )
     
     fig.update_traces(
         texttemplate='%{text:.2f}',
@@ -80,47 +81,7 @@ def create_performance_chart(df, metric_col, author_col, title):
         marker_line_color='black'
     )
     fig.update_yaxes(autorange="reversed")
-    return fig
-
-def create_trend_chart(df, date_col, metrics):
-    """Create enhanced time series chart."""
-    df = df.copy()
-    df['date_only'] = df[date_col].dt.date
-    
-    trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
-    if trend_df.empty:
-        return None
-    
-    fig = px.line(
-        trend_df,
-        x='date_only',
-        y=metrics,
-        title="Performance Trends",
-        labels={'date_only': 'Date', 'value': 'Value'},
-        height=400,
-        markers=True,
-        line_shape='linear',
-        color_discrete_sequence=['#FF4B4B', '#0068C9']
-    )
-    
-    fig.update_traces(
-        line_width=4,
-        marker_size=10,
-        marker_line_width=2,
-        marker_line_color='black'
-    )
-    
-    fig.update_xaxes(
-        tickformat="%b %d",
-        rangeslider_visible=True,
-        gridcolor='#F0F2F6'
-    )
-    
-    fig.update_yaxes(tickformat=".2f", gridcolor='#F0F2F6')
-    fig.update_layout(plot_bgcolor='white')
-    return fig
-
-# ---- UI Components ----
+    return fig# ---- UI Components ----
 def main():
     # File upload
     st.sidebar.image("milv.png", width=250)
