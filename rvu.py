@@ -84,30 +84,35 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a time series trend chart with enhanced visibility."""
+    """Create a time series trend chart with proper aggregation and layout."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
     
+    # Aggregate data per date
     trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
-    
+
     if trend_df.empty:
         return None
-    
+
+    # Melt the dataframe to long format for Plotly
+    trend_df_melted = trend_df.melt(id_vars=['date_only'], var_name='Metric', value_name='Value')
+
+    # Create line chart with a single y-axis
     fig = px.line(
-        trend_df,
+        trend_df_melted,
         x='date_only',
-        y=metrics,
+        y='Value',
+        color='Metric',
         title="Performance Trends Over Time",
-        labels={'date_only': 'Date', 'value': 'Metric Value'},
+        labels={'date_only': 'Date', 'Value': 'Metric Value'},
         height=400,
-        markers=True,
-        line_shape='linear'
+        markers=True
     )
-    
-    fig.update_traces(line_width=4, marker_size=10, marker_line_width=2)
+
+    fig.update_traces(line_width=3, marker_size=8, marker_line_width=2)
     fig.update_xaxes(tickformat="%b %d", rangeslider_visible=True)
     fig.update_yaxes(tickformat=".2f")
-    
+
     return fig
 
 # ---- Main Application ----
@@ -135,111 +140,63 @@ def main():
     
     st.title("MILV Daily Productivity")
     tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
-    
+
+    # Multi-Select Provider Search (Persist Across Tabs)
+    available_providers = sorted(df[display_cols["author"]].unique())
+    selected_providers = st.sidebar.multiselect(
+        "Select Providers",
+        options=available_providers,
+        default=available_providers  # Default to all selected
+    )
+
     with tab1:
         st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
         df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
-        
+
+        # Apply provider filter
+        if selected_providers:
+            df_latest = df_latest[df_latest[display_cols["author"]].isin(selected_providers)]
+
         if not df_latest.empty:
-            cols = st.columns(4)
-            metrics = {
-                "Total Points": display_cols["points"],
-                "Total Procedures": display_cols["procedure"],
-                "Points/Half-Day": display_cols["points/half day"],
-                "Procedures/Half-Day": display_cols["procedure/half"]
-            }
-            for (title, col), c in zip(metrics.items(), cols):
-                value = df_latest[col].sum() if "Total" in title else df_latest[col].mean()
-                c.metric(title, f"{value:,.2f}")
-            
-            st.subheader("🔍 Detailed Data")
-            search = st.text_input("Search providers:")
-            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
-            st.dataframe(filtered, use_container_width=True)
-            
-            st.subheader("📊 Performance")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(create_performance_chart(filtered, display_cols["points/half day"], 
-                                                         display_cols["author"], "Points per Half-Day"), 
-                                use_container_width=True)
-            with col2:
-                st.plotly_chart(create_performance_chart(filtered, display_cols["procedure/half"], 
-                                                         display_cols["author"], "Procedures per Half-Day"), 
-                                use_container_width=True)
+            st.dataframe(df_latest, use_container_width=True)
 
-   with tab2:
-    st.subheader("📈 Trend Analysis")
+    with tab2:
+        st.subheader("📈 Trend Analysis")
 
-    # Ensure session state for date range
-    if 'date_range' not in st.session_state:
-        st.session_state.date_range = [max_date - pd.DateOffset(days=7), max_date]
+        dates = st.date_input(
+            "Select Date Range",
+            value=[max_date - pd.DateOffset(days=7), max_date],
+            min_value=min_date,
+            max_value=max_date
+        )
 
-    # Date selection input
-    dates = st.date_input(
-        "Select Date Range",
-        value=st.session_state.date_range,
-        min_value=min_date,
-        max_value=max_date
-    )
+        if len(dates) != 2 or dates[0] > dates[1]:
+            st.error("❌ Invalid date range selected.")
+            return
 
-    # Ensure a valid date range is selected
-    if len(dates) != 2 or dates[0] > dates[1]:
-        st.error("❌ Invalid date range. Please select a valid start and end date.")
-        return
+        start, end = dates
+        df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
 
-    # Update session state
-    st.session_state.date_range = dates
-    start, end = dates
+        # Apply provider filter
+        if selected_providers:
+            df_range = df_range[df_range[display_cols["author"]].isin(selected_providers)]
 
-    # Filter dataset based on date range
-    df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
+        if df_range.empty:
+            st.warning("⚠️ No data available for the selected date range.")
+            return
 
-    if df_range.empty:
-        st.warning("⚠️ No data available for the selected date range.")
-        return
+        trend_metrics = [display_cols["points/half day"], display_cols["procedure/half"]]
+        valid_metrics = [col for col in trend_metrics if col in df_range.columns]
 
-    # Multi-select dropdown for providers
-    available_providers = sorted(df_range[display_cols["author"]].unique())
+        if valid_metrics:
+            trend_fig = create_trend_chart(df_range, display_cols["date"], valid_metrics)
+            if trend_fig:
+                st.plotly_chart(trend_fig, use_container_width=True)
+        else:
+            st.warning("⚠️ No valid metrics available for trend analysis.")
 
-    selected_providers = st.multiselect(
-        "Select Providers",
-        options=available_providers,
-        default=available_providers,  # Default to all selected
-    )
+        st.subheader("🔍 Filtered Data")
+        st.dataframe(df_range, use_container_width=True)
 
-    # Filter data based on selected providers
-    if selected_providers:
-        df_range = df_range[df_range[display_cols["author"]].isin(selected_providers)]
-
-    # Display key metrics
-    cols = st.columns(4)
-    metrics = {
-        "Points Total": display_cols["points"],
-        "Procedures Total": display_cols["procedure"],
-        "Avg Points/HD": display_cols["points/half day"],
-        "Avg Procedures/HD": display_cols["procedure/half"]
-    }
-
-    for (title, col), c in zip(metrics.items(), cols):
-        if col in df_range.columns:
-            value = df_range[col].sum() if "Total" in title else df_range[col].mean()
-            c.metric(title, f"{value:,.2f}")
-
-    st.subheader("📈 Trends")
-
-    # Ensure valid metrics exist before plotting trends
-    trend_metrics = [display_cols["points/half day"], display_cols["procedure/half"]]
-    valid_metrics = [col for col in trend_metrics if col in df_range.columns]
-
-    if valid_metrics:
-        trend_fig = create_trend_chart(df_range, display_cols["date"], valid_metrics)
-        if trend_fig:
-            st.plotly_chart(trend_fig, use_container_width=True)
-    else:
-        st.warning("⚠️ No valid metrics available for trend analysis.")
-
-    # Display filtered data
-    st.subheader("🔍 Filtered Data")
-    st.dataframe(df_range, use_container_width=True)
-
+if __name__ == "__main__":
+    main()
