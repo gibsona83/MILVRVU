@@ -69,7 +69,7 @@ else:
 # Function to plot top/bottom charts
 def plot_split_chart(df, x_col, y_col, title_top, title_bottom, ylabel):
     """Generates two sorted bar charts for better readability."""
-
+    
     df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)
 
     if df_sorted.empty:
@@ -128,18 +128,15 @@ if df is not None:
             # **Searchable Data Table**
             st.subheader("🔍 Searchable Detailed Data")
             search_query = st.text_input("Search for a provider (Tab 1):")
-            if search_query:
-                df_filtered = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)]
-            else:
-                df_filtered = df_latest
+            df_filtered = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)] if search_query else df_latest
             st.dataframe(df_filtered, use_container_width=True, height=400)
 
             st.subheader("📊 Data Visualizations")
 
-            plot_split_chart(df_latest, "last_name", "points_half_day", "Top 10 Providers by Points/Half-Day", 
+            plot_split_chart(df_filtered, "last_name", "points_half_day", "Top 10 Providers by Points/Half-Day", 
                              "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
 
-            plot_split_chart(df_latest, "last_name", "procedures_half_day", "Top 10 Providers by Procedures/Half-Day", 
+            plot_split_chart(df_filtered, "last_name", "procedures_half_day", "Top 10 Providers by Procedures/Half-Day", 
                              "Bottom 10 Providers by Procedures/Half-Day", "Procedures per Half-Day")
 
     # **TAB 2: Date Range Analysis**
@@ -166,40 +163,29 @@ if df is not None:
             st.error("❌ End date must be after or the same as the start date.")
             st.stop()
 
-        providers = df["author"].unique().tolist()
-        selected_providers = st.multiselect(
-            "Select Providers",
-            options=["ALL"] + providers,
-            default=["ALL"],
-            key="provider_selector"
-        )
-
-        if "ALL" in selected_providers:
-            selected_providers = providers
-
-        mask = (
-            (df["date"] >= start_date) & 
-            (df["date"] <= end_date) & 
-            (df["author"].isin(selected_providers))
-        )
-        df_filtered = df.loc[mask]
+        df_filtered = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
 
         st.subheader(f"📊 Data for {start_date.strftime('%B %d, %Y')} to {end_date.strftime('%B %d, %Y')}")
 
         if df_filtered.empty:
             st.warning("⚠️ No data available for the selected filters.")
         else:
-            # **Searchable Data Table**
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Points", df_filtered["points"].sum())
+            with col2:
+                st.metric("Total Procedures", df_filtered["procedure"].sum())
+            with col3:
+                st.metric("Avg Points/Half-Day", f"{df_filtered['points_half_day'].mean():.2f}")
+            with col4:
+                st.metric("Avg Procedures/Half-Day", f"{df_filtered['procedures_half_day'].mean():.2f}")
+
             st.subheader("🔍 Searchable Detailed Data")
             search_query_2 = st.text_input("Search for a provider (Tab 2):")
-            if search_query_2:
-                df_filtered = df_filtered[df_filtered["author"].str.contains(search_query_2, case=False, na=False)]
+            df_filtered = df_filtered[df_filtered["author"].str.contains(search_query_2, case=False, na=False)] if search_query_2 else df_filtered
             st.dataframe(df_filtered, use_container_width=True, height=400)
 
             st.subheader("📊 Data Visualizations")
 
             plot_split_chart(df_filtered, "last_name", "points_half_day", "Top 10 Providers by Points/Half-Day", 
                              "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
-
-            plot_split_chart(df_filtered, "last_name", "procedures_half_day", "Top 10 Providers by Procedures/Half-Day", 
-                             "Bottom 10 Providers by Procedures/Half-Day", "Procedures per Half-Day")
