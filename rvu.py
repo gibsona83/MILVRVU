@@ -23,7 +23,7 @@ def load_data(file_path):
         df.columns = df.columns.str.strip().str.lower()
         
         # Ensure required columns exist
-        required_columns = {"date", "author", "points", "procedure", "turnaround"}
+        required_columns = {"date", "author", "points", "procedure"}
         missing_columns = required_columns - set(df.columns)
 
         if missing_columns:
@@ -35,11 +35,8 @@ def load_data(file_path):
         df = df.dropna(subset=["date"])
 
         # Convert numeric columns
-        for col in ["points", "procedure", "turnaround"]:
+        for col in ["points", "procedure"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")  # Convert non-numeric values to NaN
-        
-        # Fill missing turnaround values with 0 (or another placeholder)
-        df["turnaround"] = df["turnaround"].fillna(0)
 
         return df
     except Exception as e:
@@ -62,7 +59,7 @@ else:
     df = None
 
 # Function to improve visualization
-def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
+def plot_bar_chart(df, x_col, y_col, title, ylabel):
     """Generates a sorted bar chart with improved readability."""
     
     # Ensure numeric conversion and drop NaNs
@@ -76,22 +73,14 @@ def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
 
     fig, ax = plt.subplots(figsize=(14, 6))  # Increased size for better readability
     
-    if horizontal:
-        ax.barh(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
-        ax.set_xlabel(ylabel, fontsize=12)
-        ax.set_ylabel("Providers", fontsize=12)
-    else:
-        ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
-        ax.set_ylabel(ylabel, fontsize=12)
-    
+    ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+    ax.set_ylabel(ylabel, fontsize=12)
+
     # Aesthetics
     ax.set_title(title, fontsize=14, fontweight="bold")
 
     if len(df_sorted[x_col]) > 10:
-        if horizontal:
-            ax.set_yticklabels(df_sorted[x_col], fontsize=10)
-        else:
-            ax.set_xticklabels(df_sorted[x_col], rotation=45, ha="right", fontsize=10)  # Rotate labels for clarity
+        ax.set_xticklabels(df_sorted[x_col], rotation=45, ha="right", fontsize=10)  # Rotate labels for clarity
     
     ax.grid(axis='y', linestyle='--', alpha=0.7)
 
@@ -119,14 +108,11 @@ if df is not None:
             st.warning("⚠️ No data available for the latest date.")
         else:
             # Metrics
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
             with col1:
                 st.metric("Total Points", df_latest["points"].sum())
             with col2:
                 st.metric("Total Procedures", df_latest["procedure"].sum())
-            with col3:
-                avg_turnaround = df_latest["turnaround"].mean()
-                st.metric("Avg Turnaround", f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A")
 
             # Data Table
             st.subheader("🔍 Detailed Data")
@@ -135,9 +121,8 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_latest, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)", horizontal=True)
-            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Ascending)", "Points", horizontal=False)
-            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures", horizontal=False)
+            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Ascending)", "Points")
+            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -192,16 +177,18 @@ if df is not None:
             st.warning("⚠️ No data available for the selected filters.")
         else:
             # Metrics
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
             with col1:
                 st.metric("Total Points", df_filtered["points"].sum())
             with col2:
                 st.metric("Total Procedures", df_filtered["procedure"].sum())
-            with col3:
-                avg_turnaround = df_filtered["turnaround"].mean()
-                st.metric("Avg Turnaround", f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A")
 
-            # Visualizations
-            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)", horizontal=True)
-            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points", horizontal=False)
-            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures", horizontal=False)
+            # Data Table
+            st.subheader("🔍 Detailed Data")
+            st.dataframe(df_filtered, use_container_width=True, height=400)
+
+            # **Visualizations**
+            st.subheader("📊 Data Visualizations")
+
+            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points")
+            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
