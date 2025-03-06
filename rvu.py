@@ -35,6 +35,9 @@ def load_data(file_path):
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
         df = df.dropna(subset=["date"])
 
+        # Extract Last Names to Reduce Clutter
+        df["last_name"] = df["author"].str.split(",").str[0]
+
         # Convert numeric columns
         for col in ["points", "procedure"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")  # Convert non-numeric values to NaN
@@ -65,14 +68,14 @@ def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
     
     # Ensure numeric conversion and drop NaNs
     df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
-    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)  # Now sorted DESCENDING
+    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)  # Sorted DESCENDING
 
     # Handle cases where no valid data exists
     if df_sorted.empty:
         st.warning(f"⚠️ No valid data available for {title}.")
         return
 
-    fig, ax = plt.subplots(figsize=(14, 6))  # Increased size for better readability
+    fig, ax = plt.subplots(figsize=(12, 6))  # Adjusted size for better readability
 
     if horizontal:
         ax.barh(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
@@ -85,7 +88,7 @@ def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
     # Aesthetics
     ax.set_title(title, fontsize=14, fontweight="bold")
 
-    if len(df_sorted[x_col]) > 10:
+    if len(df_sorted[x_col]) > 15:
         if horizontal:
             ax.set_yticklabels(df_sorted[x_col], fontsize=10)
         else:
@@ -106,14 +109,13 @@ if df is not None:
 
     # Title
     st.title("MILV Daily Productivity")
+    st.subheader(f"📅 Data for {formatted_max_date}")
 
     # Create Tabs
     tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
 
     # **TAB 1: Latest Date Data**
     with tab1:
-        st.subheader(f"📅 Data for {formatted_max_date}")
-
         df_latest = df[df["date"] == pd.Timestamp(max_date)]
 
         if df_latest.empty:
@@ -133,8 +135,8 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Descending)", "Points", horizontal=True)
-            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
+            plot_bar_chart(df_latest, "last_name", "points", "Points per Provider (Descending)", "Points", horizontal=True)
+            plot_bar_chart(df_latest, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -202,5 +204,5 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Descending)", "Points", horizontal=True)
-            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
+            plot_bar_chart(df_filtered, "last_name", "points", "Points per Provider (Descending)", "Points", horizontal=True)
+            plot_bar_chart(df_filtered, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
