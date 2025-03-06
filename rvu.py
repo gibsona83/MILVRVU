@@ -80,7 +80,7 @@ def create_performance_chart(df, metric_col, author_col, title):
     fig.update_yaxes(autorange="reversed")
     return fig
 
-ddef create_trend_chart(df, date_col, metrics):
+def create_trend_chart(df, date_col, metrics):
     """Create an area chart for performance trends to avoid duplication."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
