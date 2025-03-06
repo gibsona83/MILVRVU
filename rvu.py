@@ -168,47 +168,78 @@ def main():
                                                          display_cols["author"], "Procedures per Half-Day"), 
                                 use_container_width=True)
 
-    with tab2:
-        st.subheader("Date Range Analysis")
+   with tab2:
+    st.subheader("📈 Trend Analysis")
 
-        if 'date_range' not in st.session_state:
-            st.session_state.date_range = [max_date - pd.DateOffset(days=7), max_date]
+    # Ensure session state for date range
+    if 'date_range' not in st.session_state:
+        st.session_state.date_range = [max_date - pd.DateOffset(days=7), max_date]
 
-        dates = st.date_input(
-            "Select Range (Start - End)",
-            value=st.session_state.date_range,
-            min_value=min_date,
-            max_value=max_date
-        )
+    # Date selection input
+    dates = st.date_input(
+        "Select Date Range",
+        value=st.session_state.date_range,
+        min_value=min_date,
+        max_value=max_date
+    )
 
-        if len(dates) != 2 or dates[0] > dates[1]:
-            st.error("❌ Invalid date range selected.")
-            return
+    # Ensure a valid date range is selected
+    if len(dates) != 2 or dates[0] > dates[1]:
+        st.error("❌ Invalid date range. Please select a valid start and end date.")
+        return
 
-        st.session_state.date_range = dates
-        start, end = dates
+    # Update session state
+    st.session_state.date_range = dates
+    start, end = dates
 
-        df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
+    # Filter dataset based on date range
+    df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
 
-        if df_range.empty:
-            st.warning("⚠️ No data available for the selected date range.")
-            return
+    if df_range.empty:
+        st.warning("⚠️ No data available for the selected date range.")
+        return
 
-        st.subheader("📈 Trends")
-        trend_metrics = [display_cols["points/half day"], display_cols["procedure/half"]]
-        valid_metrics = [col for col in trend_metrics if col in df_range.columns]
+    # Multi-select dropdown for providers
+    available_providers = sorted(df_range[display_cols["author"]].unique())
 
-        if valid_metrics:
-            trend_fig = create_trend_chart(df_range, display_cols["date"], valid_metrics)
-            if trend_fig:
-                st.plotly_chart(trend_fig, use_container_width=True)
-        else:
-            st.warning("No trend data available.")
+    selected_providers = st.multiselect(
+        "Select Providers",
+        options=available_providers,
+        default=available_providers,  # Default to all selected
+    )
 
-        st.subheader("🔍 Filtered Data")
-        search = st.text_input("Search providers (Trends):")
-        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
-        st.dataframe(filtered_range, use_container_width=True)
+    # Filter data based on selected providers
+    if selected_providers:
+        df_range = df_range[df_range[display_cols["author"]].isin(selected_providers)]
 
-if __name__ == "__main__":
-    main()
+    # Display key metrics
+    cols = st.columns(4)
+    metrics = {
+        "Points Total": display_cols["points"],
+        "Procedures Total": display_cols["procedure"],
+        "Avg Points/HD": display_cols["points/half day"],
+        "Avg Procedures/HD": display_cols["procedure/half"]
+    }
+
+    for (title, col), c in zip(metrics.items(), cols):
+        if col in df_range.columns:
+            value = df_range[col].sum() if "Total" in title else df_range[col].mean()
+            c.metric(title, f"{value:,.2f}")
+
+    st.subheader("📈 Trends")
+
+    # Ensure valid metrics exist before plotting trends
+    trend_metrics = [display_cols["points/half day"], display_cols["procedure/half"]]
+    valid_metrics = [col for col in trend_metrics if col in df_range.columns]
+
+    if valid_metrics:
+        trend_fig = create_trend_chart(df_range, display_cols["date"], valid_metrics)
+        if trend_fig:
+            st.plotly_chart(trend_fig, use_container_width=True)
+    else:
+        st.warning("⚠️ No valid metrics available for trend analysis.")
+
+    # Display filtered data
+    st.subheader("🔍 Filtered Data")
+    st.dataframe(df_range, use_container_width=True)
+
