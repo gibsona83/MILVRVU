@@ -250,12 +250,12 @@ if df is not None:
                     st.plotly_chart(fig, use_container_width=True)
                 
                 st.subheader("📈 Trend Analysis")
-                trend_fig = create_trend_chart(
-                    df_range,
-                    display_cols["date"],
-                    [display_cols["points/half day"], display_cols["procedure/half"]]
-                )
-                if trend_fig:
-                    st.plotly_chart(trend_fig, use_container_width=True)
-                else:
-                    st.warning("No trend data available for selected period")
+trend_fig = create_trend_chart(
+    df_range,
+    display_cols["date"],
+    [display_cols["points/half day"], display_cols["procedure/half"]]
+)
+if trend_fig:
+    st.plotly_chart(trend_fig, use_container_width=True)
+else:
+    st.warning("No trend data available for selected period")
