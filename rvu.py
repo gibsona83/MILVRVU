@@ -58,6 +58,26 @@ elif os.path.exists(FILE_STORAGE_PATH):
 else:
     df = None
 
+# Function to improve visualization
+def plot_bar_chart(df, x_col, y_col, title, ylabel):
+    """Generates a sorted bar chart with better readability."""
+    df_sorted = df.sort_values(by=y_col, ascending=True)  # Sorting for better clarity
+    
+    fig, ax = plt.subplots(figsize=(12, 5))  # Increase figure size for better visibility
+    ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+    
+    # Aesthetics
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_xticks(range(len(df_sorted[x_col])))
+    ax.set_xticklabels(df_sorted[x_col], rotation=45, ha="right", fontsize=10)  # Rotate labels for clarity
+    
+    # Add grid for better readability
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Show plot
+    st.pyplot(fig)
+
 # Ensure data is available
 if df is not None:
     # Sort by date and get min/max dates
@@ -95,30 +115,9 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            # Points per half-day (by provider)
-            fig, ax = plt.subplots(figsize=(8, 4))
-            df_latest.groupby(["author", df_latest["date"].dt.strftime('%p')])["points"].sum().unstack().plot(kind="bar", ax=ax)
-            ax.set_title("Points per Half-Day by Provider")
-            ax.set_ylabel("Points")
-            ax.legend(title="Half-Day")
-            ax.grid(True)
-            st.pyplot(fig)
-
-            # Procedures per half-day (by provider)
-            fig, ax = plt.subplots(figsize=(8, 4))
-            df_latest.groupby(["author", df_latest["date"].dt.strftime('%p')])["procedure"].sum().unstack().plot(kind="bar", ax=ax)
-            ax.set_title("Procedures per Half-Day by Provider")
-            ax.set_ylabel("Procedures")
-            ax.legend(title="Half-Day")
-            ax.grid(True)
-            st.pyplot(fig)
-
-            # Daily Trends
-            fig, ax = plt.subplots(figsize=(10, 4))
-            df.groupby("date")["points"].sum().plot(kind="line", ax=ax, marker="o")
-            ax.set_title("Daily Points Overview")
-            ax.grid(True)
-            st.pyplot(fig)
+            plot_bar_chart(df_latest, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)")
+            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Ascending)", "Points")
+            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -189,27 +188,6 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            # Points per half-day (by provider)
-            fig, ax = plt.subplots(figsize=(8, 4))
-            df_filtered.groupby(["author", df_filtered["date"].dt.strftime('%p')])["points"].sum().unstack().plot(kind="bar", ax=ax)
-            ax.set_title("Points per Half-Day by Provider")
-            ax.set_ylabel("Points")
-            ax.legend(title="Half-Day")
-            ax.grid(True)
-            st.pyplot(fig)
-
-            # Procedures per half-day (by provider)
-            fig, ax = plt.subplots(figsize=(8, 4))
-            df_filtered.groupby(["author", df_filtered["date"].dt.strftime('%p')])["procedure"].sum().unstack().plot(kind="bar", ax=ax)
-            ax.set_title("Procedures per Half-Day by Provider")
-            ax.set_ylabel("Procedures")
-            ax.legend(title="Half-Day")
-            ax.grid(True)
-            st.pyplot(fig)
-
-            # Daily Trends
-            fig, ax = plt.subplots(figsize=(10, 4))
-            df_filtered.groupby("date")["points"].sum().plot(kind="line", ax=ax, marker="o")
-            ax.set_title("Daily Points Overview")
-            ax.grid(True)
-            st.pyplot(fig)
+            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)")
+            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points")
+            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
