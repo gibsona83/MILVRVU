@@ -80,29 +80,28 @@ def create_performance_chart(df, metric_col, author_col, title):
     fig.update_yaxes(autorange="reversed")
     return fig
 
-def create_trend_chart(df, date_col, author_col, metrics):
-    """Create a time series trend chart with correct aggregation, avoiding duplicates."""
+def create_trend_chart(df, date_col, metrics):
+    """Create a time series trend chart with correct aggregation."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data per date and provider (ensures no duplicate stacking)
-    trend_df = df.groupby(['date_only', author_col])[metrics].mean().reset_index().dropna()
+    # Aggregate data per date
+    trend_df = df.groupby(['date_only'])[metrics].mean().reset_index().dropna()
 
     if trend_df.empty:
         return None
 
     # Melt the dataframe to long format for Plotly
-    trend_df_melted = trend_df.melt(id_vars=['date_only', author_col], var_name='Metric', value_name='Value')
+    trend_df_melted = trend_df.melt(id_vars=['date_only'], var_name='Metric', value_name='Value')
 
     # Create line chart
     fig = px.line(
         trend_df_melted,
         x='date_only',
         y='Value',
-        color=author_col,  # Ensure separate lines per provider
-        line_group='Metric',
+        color='Metric',
         title="Performance Trends Over Time",
-        labels={'date_only': 'Date', 'Value': 'Metric Value', author_col: 'Provider'},
+        labels={'date_only': 'Date', 'Value': 'Metric Value'},
         height=500,
         markers=True
     )
@@ -170,16 +169,19 @@ def main():
             max_value=max_date
         )
 
-        if len(dates) != 2 or dates[0] > dates[1]:
-            st.error("❌ Invalid date range selected.")
-            return
+        if len(dates) != 2:
+            st.error("❌ Please select both start and end dates")
+            st.stop()
+        if dates[0] > dates[1]:
+            st.error("❌ End date must be after start date")
+            st.stop()
 
         start, end = dates
         df_range = df[df["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
 
         if df_range.empty:
             st.warning("⚠️ No data available for the selected date range.")
-            return
+            st.stop()
 
         trend_metrics = ["points/half day", "procedure/half"]
         valid_metrics = [col for col in trend_metrics if col in df_range.columns]
