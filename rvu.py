@@ -81,44 +81,35 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a time series trend chart with enhanced visibility."""
+    """Create a time series trend chart with proper aggregation and layout."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
     
+    # Aggregate data per date
     trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
-    
+
     if trend_df.empty:
         return None
-    
+
+    # Melt the dataframe to long format for Plotly
+    trend_df_melted = trend_df.melt(id_vars=['date_only'], var_name='Metric', value_name='Value')
+
+    # Create line chart with a single y-axis
     fig = px.line(
-        trend_df,
+        trend_df_melted,
         x='date_only',
-        y=metrics,
+        y='Value',
+        color='Metric',
         title="Performance Trends Over Time",
-        labels={'date_only': 'Date', 'value': 'Metric Value'},
+        labels={'date_only': 'Date', 'Value': 'Metric Value'},
         height=400,
-        markers=True,
-        line_shape='linear'
+        markers=True
     )
-    
-    fig.update_traces(
-        line_width=4,
-        marker_size=10,
-        marker_line_width=2,
-        marker_line_color='black'
-    )
-    
-    fig.update_xaxes(
-        tickformat="%b %d",
-        rangeslider_visible=True,
-        gridcolor='#F0F2F6'
-    )
-    
-    fig.update_yaxes(
-        tickformat=".2f",
-        gridcolor='#F0F2F6'
-    )
-    
+
+    fig.update_traces(line_width=3, marker_size=8, marker_line_width=2)
+    fig.update_xaxes(tickformat="%b %d", rangeslider_visible=True)
+    fig.update_yaxes(tickformat=".2f")
+
     return fig
 
 # ---- Main Application ----
@@ -151,6 +142,15 @@ def main():
 
         if not df_latest.empty:
             st.dataframe(df_latest, use_container_width=True)
+
+            st.subheader("📊 Performance")
+            col1, col2 = st.columns(2)
+            with col1:
+                fig = create_performance_chart(df_latest, "points/half day", "author", "Points per Half-Day")
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                fig = create_performance_chart(df_latest, "procedure/half", "author", "Procedures per Half-Day")
+                st.plotly_chart(fig, use_container_width=True)
 
     # TAB 2: Trend Analysis
     with tab2:
