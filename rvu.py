@@ -81,23 +81,36 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a clean and improved time series line chart."""
+    """Create a clean time series line chart with proper aggregation."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data by date
-    trend_df = df.groupby('date_only', as_index=False)[metrics].sum()
+    # Ensure columns exist before grouping
+    valid_metrics = [col for col in metrics if col in df.columns]
+    if not valid_metrics:
+        st.error("❌ No valid numeric columns found for trend analysis.")
+        return None
+
+    # Aggregate data by date (ensures one record per date)
+    trend_df = df.groupby('date_only', as_index=False)[valid_metrics].sum()
+
+    # Drop NaN rows
+    trend_df = trend_df.dropna()
 
     if trend_df.empty:
+        st.warning("⚠️ No trend data available for selected range.")
         return None
 
     # Melt the dataframe for Plotly
     trend_df_melted = trend_df.melt(
         id_vars=['date_only'],
-        value_vars=metrics,
+        value_vars=valid_metrics,
         var_name='Metric',
         value_name='Value'
     )
+
+    # Convert to numeric (ensures Plotly handles it correctly)
+    trend_df_melted["Value"] = pd.to_numeric(trend_df_melted["Value"], errors="coerce").fillna(0)
 
     # Create an improved line chart
     fig = px.line(
@@ -109,7 +122,7 @@ def create_trend_chart(df, date_col, metrics):
         labels={'date_only': 'Date', 'Value': 'Total Value'},
         height=500,
         markers=True,
-        line_shape='spline',  # Makes the graph smoother
+        line_shape='spline',  # Smoother curve
         color_discrete_sequence=["#1f77b4", "#ff7f0e"]
     )
 
