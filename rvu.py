@@ -35,17 +35,13 @@ def load_data(file_path):
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
         df = df.dropna(subset=["date"])
 
-        # Extract Last Names to Reduce Clutter
-        df["last_name"] = df["author"].str.split(",").str[0]
-
         # Convert numeric columns
         for col in ["points", "procedure", "shift"]:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)  # Convert non-numeric values to NaN, fill NaN with 0
 
-        # Compute Points/Half-Day & Procedures/Half-Day, avoiding division errors
+        # Compute Points/Half-Day (Avoiding division errors)
         df = df[df["shift"] > 0]  # Exclude providers where shift = 0
         df["points_half_day"] = df["points"] / df["shift"]
-        df["procedures_half_day"] = df["procedure"] / df["shift"]
 
         return df
     except Exception as e:
@@ -116,29 +112,24 @@ if df is not None:
         if df_latest.empty:
             st.warning("⚠️ No data available for the latest date.")
         else:
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Total Points", df_latest["points"].sum())
             with col2:
                 st.metric("Total Procedures", df_latest["procedure"].sum())
             with col3:
                 st.metric("Avg Points/Half-Day", f"{df_latest['points_half_day'].mean():.2f}")
-            with col4:
-                st.metric("Avg Procedures/Half-Day", f"{df_latest['procedures_half_day'].mean():.2f}")
 
             # **Searchable Data Table**
             st.subheader("🔍 Searchable Detailed Data")
             search_query = st.text_input("Search for a provider (Tab 1):")
             df_filtered = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)] if search_query else df_latest
-            st.dataframe(df_filtered, use_container_width=True, height=400)
+            st.dataframe(df_filtered.drop(columns=["points_half_day"]), use_container_width=True, height=400)
 
             st.subheader("📊 Data Visualizations")
 
-            plot_split_chart(df_filtered, "last_name", "points_half_day", "Top 10 Providers by Points/Half-Day", 
+            plot_split_chart(df_filtered, "author", "points_half_day", "Top 10 Providers by Points/Half-Day", 
                              "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
-
-            plot_split_chart(df_filtered, "last_name", "procedures_half_day", "Top 10 Providers by Procedures/Half-Day", 
-                             "Bottom 10 Providers by Procedures/Half-Day", "Procedures per Half-Day")
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -171,12 +162,20 @@ if df is not None:
         if df_filtered.empty:
             st.warning("⚠️ No data available for the selected filters.")
         else:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Points", df_filtered["points"].sum())
+            with col2:
+                st.metric("Total Procedures", df_filtered["procedure"].sum())
+            with col3:
+                st.metric("Avg Points/Half-Day", f"{df_filtered['points_half_day'].mean():.2f}")
+
             st.subheader("🔍 Searchable Detailed Data")
             search_query_2 = st.text_input("Search for a provider (Tab 2):")
             df_filtered = df_filtered[df_filtered["author"].str.contains(search_query_2, case=False, na=False)] if search_query_2 else df_filtered
-            st.dataframe(df_filtered, use_container_width=True, height=400)
+            st.dataframe(df_filtered.drop(columns=["points_half_day"]), use_container_width=True, height=400)
 
             st.subheader("📊 Data Visualizations")
 
-            plot_split_chart(df_filtered, "last_name", "points_half_day", "Top 10 Providers by Points/Half-Day", 
+            plot_split_chart(df_filtered, "author", "points_half_day", "Top 10 Providers by Points/Half-Day", 
                              "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
