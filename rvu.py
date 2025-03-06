@@ -114,7 +114,7 @@ def create_trend_chart(df, date_col, metrics):
         value_name='Value'
     )
 
-    # Create a line chart (restored for clarity)
+    # Create a line chart
     fig = px.line(
         trend_df_melted,
         x='date_only',
@@ -126,7 +126,6 @@ def create_trend_chart(df, date_col, metrics):
         markers=True
     )
 
-    # Formatting updates
     fig.update_traces(
         line=dict(width=3),
         marker_size=8,
@@ -175,36 +174,29 @@ def main():
     max_date = df["date"].max().date()
     
     st.title("MILV Daily Productivity")
-    tab1, tab2, tab3 = st.tabs(["📅 Daily View", "📊 Provider Analysis", "📈 Trend Analysis"])
+    tab1, tab2, tab3 = st.tabs(["📅 Daily View", "📊 Provider Performance", "📈 Trend Analysis"])
     
     with tab1:
         st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
         df_latest = df[df["date"] == pd.Timestamp(max_date)]
-
-        if not df_latest.empty:
-            search_query = st.text_input("Search Providers (Daily):", key="search_daily")
-            if search_query:
-                df_latest = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)]
-            st.dataframe(df_latest, use_container_width=True)
+        st.dataframe(df_latest, use_container_width=True)
 
     with tab2:
         st.subheader("📊 Provider Performance Over Time")
         date_range = st.date_input("Select Date Range", [max_date - pd.DateOffset(days=7), max_date], min_value=min_date, max_value=max_date)
-        
-        if len(date_range) == 2 and date_range[0] <= date_range[1]:
-            df_prov = df[df["date"].between(pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1]))]
+        df_prov = df[df["date"].between(pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1]))]
 
-            search_prov = st.text_input("Search Providers (Provider Analysis):", key="search_prov")
-            if search_prov:
-                df_prov = df_prov[df_prov["author"].str.contains(search_prov, case=False, na=False)]
-            
-            st.dataframe(df_prov, use_container_width=True)
+        st.metric("Avg Points/Half Day", f"{df_prov['points/half day'].mean():.2f}")
+        st.metric("Avg Procedures/Half Day", f"{df_prov['procedure/half'].mean():.2f}")
+
+        st.subheader("📊 Provider Performance Comparison")
+        st.plotly_chart(create_performance_chart(df_prov, "points/half day", "author", "Avg Points per Half-Day"))
+        st.plotly_chart(create_performance_chart(df_prov, "procedure/half", "author", "Avg Procedures per Half-Day"))
 
     with tab3:
         st.subheader("📈 Trends Over Time")
         trend_fig = create_trend_chart(df, "date", ["points/half day", "procedure/half"])
-        if trend_fig:
-            st.plotly_chart(trend_fig, use_container_width=True)
+        st.plotly_chart(trend_fig)
 
 if __name__ == "__main__":
     main()
