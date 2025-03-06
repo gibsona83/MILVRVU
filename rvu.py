@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-import numpy as np
 
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -63,43 +62,37 @@ elif os.path.exists(FILE_STORAGE_PATH):
 else:
     df = None
 
-# Function to improve visualization
-def plot_bar_chart(df, x_col, y_col, title, ylabel):
-    """Generates a sorted horizontal bar chart with improved readability."""
+# Function for two-part visualizations
+def plot_split_chart(df, x_col, y_col, title_top, title_bottom, ylabel):
+    """Generates two sorted bar charts for better readability."""
 
     # Ensure numeric conversion and drop NaNs
     df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
-    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)  # Sorted DESCENDING
+    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)
 
     # Handle cases where no valid data exists
     if df_sorted.empty:
-        st.warning(f"⚠️ No valid data available for {title}.")
+        st.warning(f"⚠️ No valid data available for {title_top} and {title_bottom}.")
         return
 
-    # Set figure size dynamically based on number of providers
-    fig_height = min(max(len(df_sorted) * 0.2, 5), 15)  # Adjust height dynamically
-    fig, ax = plt.subplots(figsize=(12, fig_height))
+    # Get top and bottom performers
+    top_df = df_sorted.head(10)   # Top 10
+    bottom_df = df_sorted.tail(10) # Bottom 10
 
-    # Bar chart
-    y_labels = df_sorted[x_col].values
-    ax.barh(y_labels, df_sorted[y_col], color='steelblue', edgecolor='black')
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))  # Two side-by-side plots
 
-    # Aesthetics
-    ax.set_xlabel(ylabel, fontsize=12)
-    ax.set_ylabel("Providers", fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight="bold")
+    # Top performers
+    axes[0].barh(top_df[x_col], top_df[y_col], color='darkblue', edgecolor='black')
+    axes[0].set_title(title_top, fontsize=14, fontweight="bold")
+    axes[0].invert_yaxis()
+    axes[0].set_xlabel(ylabel)
 
-    # Show fewer labels to avoid overlap
-    if len(y_labels) > 20:
-        step = max(len(y_labels) // 10, 1)  # Show every Nth label
-        ax.set_yticks(ax.get_yticks()[::step])
-        ax.set_yticklabels(y_labels[::step], fontsize=10)
-    else:
-        ax.set_yticklabels(y_labels, fontsize=10)
+    # Bottom performers
+    axes[1].barh(bottom_df[x_col], bottom_df[y_col], color='darkred', edgecolor='black')
+    axes[1].set_title(title_bottom, fontsize=14, fontweight="bold")
+    axes[1].set_xlabel(ylabel)
 
-    ax.grid(axis='x', linestyle='--', alpha=0.7)
-
-    # Show plot
+    plt.tight_layout()
     st.pyplot(fig)
 
 # Ensure data is available
@@ -131,15 +124,23 @@ if df is not None:
             with col2:
                 st.metric("Total Procedures", df_latest["procedure"].sum())
 
-            # Data Table
-            st.subheader("🔍 Detailed Data")
-            st.dataframe(df_latest, use_container_width=True, height=400)
+            # Searchable Data Table
+            st.subheader("🔍 Searchable Detailed Data")
+            search_query = st.text_input("Search for a provider:")
+            if search_query:
+                df_filtered = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)]
+            else:
+                df_filtered = df_latest
+            st.dataframe(df_filtered, use_container_width=True, height=400)
 
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_latest, "last_name", "points", "Points per Provider (Descending)", "Points")
-            plot_bar_chart(df_latest, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures")
+            plot_split_chart(df_latest, "last_name", "points", 
+                             "Top 10 Providers by Points", "Bottom 10 Providers by Points", "Points")
+
+            plot_split_chart(df_latest, "last_name", "procedure", 
+                             "Top 10 Providers by Procedures", "Bottom 10 Providers by Procedures", "Procedures")
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -162,11 +163,6 @@ if df is not None:
 
         formatted_start_date = start_date.strftime("%B %d, %Y")
         formatted_end_date = end_date.strftime("%B %d, %Y")
-
-        # Validate date order
-        if start_date > end_date:
-            st.error("❌ End date must be after start date")
-            st.stop()
 
         # Provider selection
         providers = df["author"].unique().tolist()
@@ -200,12 +196,9 @@ if df is not None:
             with col2:
                 st.metric("Total Procedures", df_filtered["procedure"].sum())
 
-            # Data Table
-            st.subheader("🔍 Detailed Data")
-            st.dataframe(df_filtered, use_container_width=True, height=400)
-
             # **Visualizations**
-            st.subheader("📊 Data Visualizations")
+            plot_split_chart(df_filtered, "last_name", "points", 
+                             "Top 10 Providers by Points", "Bottom 10 Providers by Points", "Points")
 
-            plot_bar_chart(df_filtered, "last_name", "points", "Points per Provider (Descending)", "Points")
-            plot_bar_chart(df_filtered, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures")
+            plot_split_chart(df_filtered, "last_name", "procedure", 
+                             "Top 10 Providers by Procedures", "Bottom 10 Providers by Procedures", "Procedures")
