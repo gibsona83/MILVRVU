@@ -9,7 +9,7 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 # Constants
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
 REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
-                    "points/half day", "procedure/half day"}
+                    "points/half day", "procedure/half"}
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
@@ -84,41 +84,60 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create enhanced time series chart."""
+    """Create a time series trend chart with enhanced visibility."""
+    # Ensure numeric data and valid dates
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
     
+    # Aggregate and clean data
     trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
+    
     if trend_df.empty:
         return None
     
+    # Create figure with bold lines and markers
     fig = px.line(
         trend_df,
         x='date_only',
         y=metrics,
-        title="Performance Trends",
-        labels={'date_only': 'Date', 'value': 'Value'},
+        title="Performance Trends Over Time",
+        labels={'date_only': 'Date', 'value': 'Metric Value'},
         height=400,
-        markers=True,
-        line_shape='linear',
-        color_discrete_sequence=['#FF4B4B', '#0068C9']
+        markers=True,  # Add data point markers
+        line_shape='linear',  # Straight line segments between points
+        color_discrete_sequence=['#FF4B4B', '#0068C9']  # High-contrast colors
     )
     
+    # Enhance line visibility
     fig.update_traces(
-        line_width=4,
-        marker_size=10,
+        line_width=4,  # Thicker lines
+        marker_size=10,  # Larger markers
         marker_line_width=2,
         marker_line_color='black'
     )
     
+    # Format axes
     fig.update_xaxes(
-        tickformat="%Y-%m-%d",
+        tickformat="%b %d",  # Month + day format
         rangeslider_visible=True,
         gridcolor='#F0F2F6'
     )
     
-    fig.update_yaxes(tickformat=".2f", gridcolor='#F0F2F6')
-    fig.update_layout(plot_bgcolor='white')
+    fig.update_yaxes(
+        tickformat=".2f",
+        gridcolor='#F0F2F6'
+    )
+    
+    # Add direct labels
+    fig.update_layout(
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=16,
+            font_family="Arial"
+        ),
+        plot_bgcolor='white'
+    )
+    
     return fig
 
 # ---- Main Application ----
@@ -130,8 +149,7 @@ def main():
     # Data loading
     if uploaded_file:
         try:
-            df = pd.read_excel(uploaded_file)
-            df.to_excel(FILE_STORAGE_PATH, index=False)
+            pd.read_excel(uploaded_file).to_excel(FILE_STORAGE_PATH, index=False)
             st.success("✅ File uploaded!")
         except Exception as e:
             st.error(f"Upload failed: {str(e)}")
@@ -154,7 +172,7 @@ def main():
     # TAB 1: Latest Day
     with tab1:
         st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
-        df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
+        df_latest = df[df[display_cols["date"] == pd.Timestamp(max_date)]
         
         if not df_latest.empty:
             cols = st.columns(4)
@@ -162,7 +180,7 @@ def main():
                 "Total Points": display_cols["points"],
                 "Total Procedures": display_cols["procedure"],
                 "Points/Half-Day": display_cols["points/half day"],
-                "Procedures/Half-Day": display_cols["procedure/half day"]
+                "Procedures/Half-Day": display_cols["procedure/half"]
             }
             for (title, col), c in zip(metrics.items(), cols):
                 value = df_latest[col].sum() if "Total" in title else df_latest[col].mean()
@@ -180,7 +198,7 @@ def main():
                                               display_cols["author"], "Points per Half-Day")
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
-                fig = create_performance_chart(filtered, display_cols["procedure/half day"], 
+                fig = create_performance_chart(filtered, display_cols["procedure/half"], 
                                               display_cols["author"], "Procedures per Half-Day")
                 st.plotly_chart(fig, use_container_width=True)
     
@@ -188,6 +206,7 @@ def main():
     with tab2:
         st.subheader("Date Range Analysis")
         
+        # Date input with session state
         if 'date_range' not in st.session_state:
             st.session_state.date_range = [max_date - pd.DateOffset(days=7), max_date]
         
@@ -199,8 +218,9 @@ def main():
             help="Type dates (YYYY-MM-DD) or use calendar"
         )
         
-        if not isinstance(dates, list) or len(dates) != 2:
-            st.warning("⚠️ Please select a valid start and end date.")
+        # Handle date validation
+        if len(dates) != 2:
+            st.info("ℹ️ Select start and end dates")
             st.stop()
         if dates[0] > dates[1]:
             st.error("❌ End date must be after start date")
@@ -214,13 +234,29 @@ def main():
             st.warning("⚠️ No data in selected range")
             st.stop()
         
+        cols = st.columns(4)
+        metrics = {
+            "Points Total": display_cols["points"],
+            "Procedures Total": display_cols["procedure"],
+            "Avg Points/HD": display_cols["points/half day"],
+            "Avg Procedures/HD": display_cols["procedure/half"]
+        }
+        for (title, col), c in zip(metrics.items(), cols):
+            value = df_range[col].sum() if "Total" in title else df_range[col].mean()
+            c.metric(title, f"{value:,.2f}")
+        
         st.subheader("📈 Trends")
         trend_fig = create_trend_chart(df_range, display_cols["date"], 
-                                      [display_cols["points/half day"], display_cols["procedure/half day"]])
+                                      [display_cols["points/half day"], display_cols["procedure/half"]])
         if trend_fig:
             st.plotly_chart(trend_fig, use_container_width=True)
         else:
             st.warning("No trend data available")
+        
+        st.subheader("🔍 Filtered Data")
+        search = st.text_input("Search providers (Trends):")
+        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
+        st.dataframe(filtered_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
