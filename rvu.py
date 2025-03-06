@@ -125,8 +125,14 @@ if df is not None:
             with col4:
                 st.metric("Avg Procedures/Half-Day", f"{df_latest['procedures_half_day'].mean():.2f}")
 
-            st.subheader("🔍 Detailed Data")
-            st.dataframe(df_latest, use_container_width=True, height=400)
+            # **Searchable Data Table**
+            st.subheader("🔍 Searchable Detailed Data")
+            search_query = st.text_input("Search for a provider (Tab 1):")
+            if search_query:
+                df_filtered = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)]
+            else:
+                df_filtered = df_latest
+            st.dataframe(df_filtered, use_container_width=True, height=400)
 
             st.subheader("📊 Data Visualizations")
 
@@ -183,15 +189,12 @@ if df is not None:
         if df_filtered.empty:
             st.warning("⚠️ No data available for the selected filters.")
         else:
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total Points", df_filtered["points"].sum())
-            with col2:
-                st.metric("Total Procedures", df_filtered["procedure"].sum())
-            with col3:
-                st.metric("Avg Points/Half-Day", f"{df_filtered['points_half_day'].mean():.2f}")
-            with col4:
-                st.metric("Avg Procedures/Half-Day", f"{df_filtered['procedures_half_day'].mean():.2f}")
+            # **Searchable Data Table**
+            st.subheader("🔍 Searchable Detailed Data")
+            search_query_2 = st.text_input("Search for a provider (Tab 2):")
+            if search_query_2:
+                df_filtered = df_filtered[df_filtered["author"].str.contains(search_query_2, case=False, na=False)]
+            st.dataframe(df_filtered, use_container_width=True, height=400)
 
             st.subheader("📊 Data Visualizations")
 
