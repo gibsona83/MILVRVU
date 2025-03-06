@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -26,7 +26,7 @@ def load_data(file_path):
         
         # Ensure required columns exist (case-insensitive check)
         required_columns = {"date", "author", "procedure", "points", "shift", 
-                           "points/half day", "procedure/half"}
+                          "points/half day", "procedure/half"}
         missing_columns = [col for col in required_columns 
                           if col not in lower_columns.values]
         
@@ -55,14 +55,71 @@ def load_data(file_path):
         for key, col in numeric_map.items():
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # Clean author names
+        # Clean and format author names
         author_col = col_mapping["author"]
-        df[author_col] = df[author_col].astype(str).str.strip()
+        df[author_col] = df[author_col].astype(str).str.strip().str.title()
 
         return df
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
         return None
+
+def create_sorted_bar_chart(df, metric_col, title):
+    """Create a sorted horizontal bar chart with Plotly."""
+    # Sort descending and remove invalid entries
+    sorted_df = df.sort_values(metric_col, ascending=False)
+    
+    fig = px.bar(
+        sorted_df,
+        x=metric_col,
+        y="Author",
+        orientation='h',
+        text=metric_col,
+        color=metric_col,
+        color_continuous_scale='Viridis',
+        title=title,
+        height=600
+    )
+    
+    fig.update_layout(
+        yaxis={'categoryorder': 'total descending'},
+        xaxis_title=metric_col,
+        yaxis_title="Provider",
+        hovermode='y unified',
+        coloraxis_colorbar=dict(title=metric_col)
+    
+    fig.update_traces(
+        texttemplate='%{text:.2f}',
+        textposition='outside'
+    )
+    
+    return fig
+
+def create_trend_chart(df, date_col, metrics):
+    """Create a time series trend chart."""
+    trend_df = df.groupby(date_col)[metrics].mean().reset_index()
+    
+    fig = px.line(
+        trend_df,
+        x=date_col,
+        y=metrics,
+        title="Performance Trends Over Time",
+        labels={'value': 'Metric Value', 'variable': 'Metrics'},
+        height=400
+    )
+    
+    fig.update_xaxes(
+        rangeslider_visible=True,
+        rangeselector=dict(
+            buttons=list([
+                dict(count=7, label="1w", step="day", stepmode="backward"),
+                dict(count=1, label="1m", step="month", stepmode="backward"),
+                dict(step="all")
+            ])
+        )
+    )
+    
+    return fig
 
 # Load existing data
 if uploaded_file:
@@ -79,41 +136,7 @@ elif os.path.exists(FILE_STORAGE_PATH):
 else:
     df = None
 
-# Rest of the code remains the same but uses original column names for display
-# ... [keep the rest of the original code but update column references using col_mapping]
-
-def plot_split_chart(df, x_col, y_col, title_top, title_bottom, ylabel):
-    """Generates two sorted bar charts using original column names."""
-    # Get actual column names from the DataFrame
-    x_col_actual = [col for col in df.columns if col.lower() == x_col.lower()][0]
-    y_col_actual = [col for col in df.columns if col.lower() == y_col.lower()][0]
-    
-    df_sorted = df.sort_values(by=y_col_actual, ascending=False)
-
-    if df_sorted.empty:
-        st.warning(f"⚠️ Not enough data for {title_top} and {title_bottom}.")
-        return
-
-    top_df = df_sorted.head(10)
-    bottom_df = df_sorted.tail(10)
-
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-
-    # Top performers
-    axes[0].barh(top_df[x_col_actual], top_df[y_col_actual], color='darkblue', edgecolor='black')
-    axes[0].set_title(title_top, fontsize=14, fontweight="bold")
-    axes[0].invert_yaxis()
-    axes[0].set_xlabel(ylabel)
-
-    # Bottom performers
-    axes[1].barh(bottom_df[x_col_actual], bottom_df[y_col_actual], color='darkred', edgecolor='black')
-    axes[1].set_title(title_bottom, fontsize=14, fontweight="bold")
-    axes[1].set_xlabel(ylabel)
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-# Main display logic with original column names
+# Main display logic
 if df is not None:
     # Get display column names
     display_cols = {
@@ -131,7 +154,6 @@ if df is not None:
     max_date = df[display_cols["date"]].max().date()
 
     st.title("MILV Daily Productivity")
-
     tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
 
     # TAB 1: Latest Day
@@ -158,9 +180,15 @@ if df is not None:
 
             # Visualizations
             st.subheader("📊 Performance Metrics")
-            plot_split_chart(filtered, "Author", "Points/half day", 
-                            "Top 10 by Points/Half-Day", "Bottom 10 by Points/Half-Day", 
-                            "Points per Half-Day")
+            col1, col2 = st.columns(2)
+            with col1:
+                fig = create_sorted_bar_chart(filtered, display_cols["points/half day"], 
+                                            "Points per Half-Day (Descending Order)")
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                fig = create_sorted_bar_chart(filtered, display_cols["procedure/half"], 
+                                            "Procedures per Half-Day (Descending Order)")
+                st.plotly_chart(fig, use_container_width=True)
 
     # TAB 2: Date Range Analysis
     with tab2:
@@ -193,7 +221,21 @@ if df is not None:
                 filtered_range = df_range[df_range[display_cols["author"]].str.contains(search_query, case=False, na=False)] if search_query else df_range
                 st.dataframe(filtered_range, use_container_width=True, height=400)
 
-                st.subheader("📊 Performance Over Time")
-                plot_split_chart(filtered_range, "Author", "Points/half day", 
-                                "Top 10 by Points/Half-Day", "Bottom 10 by Points/Half-Day", 
-                                "Points per Half-Day")
+                st.subheader("📊 Performance Analysis")
+                col1, col2 = st.columns(2)
+                with col1:
+                    fig = create_sorted_bar_chart(filtered_range, display_cols["points/half day"], 
+                                                "Points per Half-Day Timeline")
+                    st.plotly_chart(fig, use_container_width=True)
+                with col2:
+                    fig = create_sorted_bar_chart(filtered_range, display_cols["procedure/half"], 
+                                                "Procedures per Half-Day Timeline")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                st.subheader("📈 Trend Analysis")
+                trend_fig = create_trend_chart(
+                    df_range,
+                    display_cols["date"],
+                    [display_cols["points/half day"], display_cols["procedure/half"]]
+                )
+                st.plotly_chart(trend_fig, use_container_width=True)
