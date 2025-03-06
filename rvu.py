@@ -19,7 +19,7 @@ def load_data(file_path):
         xls = pd.ExcelFile(file_path)
         df = xls.parse(xls.sheet_names[0])
         
-        # Clean column names
+        # Clean column names (case-insensitive)
         df.columns = df.columns.str.strip()
         lower_columns = df.columns.str.lower()
         
@@ -47,7 +47,7 @@ def load_data(file_path):
         
         return df
     except Exception as e:
-        st.error(f"🚨 Error loading data: {str(e)}")
+        st.error(f"🚨 Error: {str(e)}")
         return None
 
 def create_performance_chart(df, metric_col, author_col, title):
@@ -84,46 +84,62 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a time series trend chart with proper aggregation and layout."""
+    """Create a time series trend chart with enhanced visibility."""
+    # Ensure numeric data and valid dates
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
     
-    # Aggregate data per date
+    # Aggregate and clean data
     trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
-
+    
     if trend_df.empty:
         return None
-
-    # Melt the dataframe to long format for Plotly
-    trend_df_melted = trend_df.melt(id_vars=['date_only'], var_name='Metric', value_name='Value')
-
-    # Create line chart with a single y-axis
+    
+    # Create figure with bold lines and markers
     fig = px.line(
-        trend_df_melted,
+        trend_df,
         x='date_only',
-        y='Value',
-        color='Metric',
+        y=metrics,
         title="Performance Trends Over Time",
-        labels={'date_only': 'Date', 'Value': 'Metric Value'},
+        labels={'date_only': 'Date', 'value': 'Metric Value'},
         height=400,
-        markers=True
+        markers=True,
+        line_shape='linear'
     )
-
-    fig.update_traces(line_width=3, marker_size=8, marker_line_width=2)
-    fig.update_xaxes(tickformat="%b %d", rangeslider_visible=True)
-    fig.update_yaxes(tickformat=".2f")
-
+    
+    # Enhance line visibility
+    fig.update_traces(
+        line_width=4,
+        marker_size=10,
+        marker_line_width=2,
+        marker_line_color='black'
+    )
+    
+    # Format axes
+    fig.update_xaxes(
+        tickformat="%b %d",
+        rangeslider_visible=True,
+        gridcolor='#F0F2F6'
+    )
+    
+    fig.update_yaxes(
+        tickformat=".2f",
+        gridcolor='#F0F2F6'
+    )
+    
     return fig
 
 # ---- Main Application ----
 def main():
+    # File upload
     st.sidebar.image("milv.png", width=250)
     uploaded_file = st.sidebar.file_uploader("Upload RVU File", type=["xlsx"])
     
+    # Data loading
     if uploaded_file:
         try:
-            df = pd.read_excel(uploaded_file)
-            df.to_excel(FILE_STORAGE_PATH, index=False)
+            df_uploaded = pd.read_excel(uploaded_file)
+            df_uploaded.to_excel(FILE_STORAGE_PATH, index=False)
             st.success("✅ File uploaded!")
         except Exception as e:
             st.error(f"Upload failed: {str(e)}")
@@ -132,37 +148,30 @@ def main():
     if df is None:
         return st.info("ℹ️ Please upload a file")
     
+    # Get display columns
     col_map = {col.lower(): col for col in df.columns}
     display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
     
+    # Date range setup
     min_date = df[display_cols["date"]].min().date()
     max_date = df[display_cols["date"]].max().date()
     
     st.title("MILV Daily Productivity")
     tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
-
-    # Multi-Select Provider Search (Persist Across Tabs)
-    available_providers = sorted(df[display_cols["author"]].unique())
-    selected_providers = st.sidebar.multiselect(
-        "Select Providers",
-        options=available_providers,
-        default=available_providers  # Default to all selected
-    )
-
+    
+    # TAB 1: Latest Day
     with tab1:
         st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
         df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
 
-        # Apply provider filter
-        if selected_providers:
-            df_latest = df_latest[df_latest[display_cols["author"]].isin(selected_providers)]
-
         if not df_latest.empty:
             st.dataframe(df_latest, use_container_width=True)
 
+    # TAB 2: Trend Analysis
     with tab2:
-        st.subheader("📈 Trend Analysis")
-
+        st.subheader("📈 Trends Over Time")
+        
+        # Date range selection
         dates = st.date_input(
             "Select Date Range",
             value=[max_date - pd.DateOffset(days=7), max_date],
@@ -176,10 +185,6 @@ def main():
 
         start, end = dates
         df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
-
-        # Apply provider filter
-        if selected_providers:
-            df_range = df_range[df_range[display_cols["author"]].isin(selected_providers)]
 
         if df_range.empty:
             st.warning("⚠️ No data available for the selected date range.")
