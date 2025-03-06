@@ -2,180 +2,178 @@ import streamlit as st
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import plotly.express as px  # Added for interactive visualizations
 
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# Sidebar - MILV Logo & File Upload
-st.sidebar.image("milv.png", width=250)
-st.sidebar.title("Upload Daily RVU File")
-uploaded_file = st.sidebar.file_uploader("Upload RVU Excel File", type=["xlsx"])
-
-# Define storage path
+# Constants
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
+REQUIRED_COLUMNS = {"date", "author", "points", "procedure", "shift"}
+METRIC_COLUMNS = ["points", "procedure", "points_half_day"]
 
+# ---- Helper Functions ----
+@st.cache_data(show_spinner=False)
 def load_data(file_path):
-    """Load and preprocess data from Excel file."""
+    """Load and preprocess data from Excel file with caching."""
     try:
         xls = pd.ExcelFile(file_path)
         df = xls.parse(xls.sheet_names[0])
         
         # Clean column names
         df.columns = df.columns.str.strip().str.lower()
+        df['author'] = df['author'].str.strip().str.lower()  # Normalize author names
         
-        # Ensure required columns exist
-        required_columns = {"date", "author", "points", "procedure", "shift"}
-        missing_columns = required_columns - set(df.columns)
-
-        if missing_columns:
-            st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
+        # Validate required columns
+        if missing := REQUIRED_COLUMNS - set(df.columns):
+            st.error(f"❌ Missing columns: {', '.join(missing)}")
             return None
-        
-        # Convert date column
+
+        # Convert and filter dates
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+        initial_count = len(df)
         df = df.dropna(subset=["date"])
+        if diff := initial_count - len(df):
+            st.warning(f"⚠️ Removed {diff} rows with invalid dates")
 
         # Convert numeric columns
-        for col in ["points", "procedure", "shift"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)  # Convert non-numeric values to NaN, fill NaN with 0
+        df[["points", "procedure", "shift"]] = df[["points", "procedure", "shift"]].apply(
+            pd.to_numeric, errors='coerce'
+        ).fillna(0)
 
-        # Compute Points/Half-Day (Avoiding division errors)
-        df = df[df["shift"] > 0]  # Exclude providers where shift = 0
+        # Calculate metrics
+        df = df.query("shift > 0").copy()  # Filter valid shifts
         df["points_half_day"] = df["points"] / df["shift"]
-
-        return df
+        
+        return df.sort_values("date")
     except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
+        st.error(f"🚨 Data loading error: {str(e)}")
         return None
 
-# Load existing data
-if uploaded_file:
-    try:
-        with open(FILE_STORAGE_PATH, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        df = load_data(FILE_STORAGE_PATH)
-        if df is not None:
-            st.success("✅ File uploaded successfully!")
-    except Exception as e:
-        st.error(f"Upload failed: {str(e)}")
-elif os.path.exists(FILE_STORAGE_PATH):
-    df = load_data(FILE_STORAGE_PATH)
-else:
-    df = None
-
-# Function to plot top/bottom charts
-def plot_split_chart(df, x_col, y_col, title_top, title_bottom, ylabel):
-    """Generates two sorted bar charts for better readability, ensuring valid data is always plotted."""
-
-    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)
-
-    if df_sorted.empty:
-        st.warning(f"⚠️ Not enough valid data for {title_top} and {title_bottom}.")
-        return
-
-    # Get top and bottom performers (handle cases with fewer than 10)
-    top_df = df_sorted.head(10) if len(df_sorted) >= 10 else df_sorted
-    bottom_df = df_sorted.tail(10) if len(df_sorted) >= 10 else df_sorted
-
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-
-    # Top performers
-    axes[0].barh(top_df[x_col], top_df[y_col], color='darkblue', edgecolor='black')
-    axes[0].set_title(title_top, fontsize=14, fontweight="bold")
-    axes[0].invert_yaxis()
-    axes[0].set_xlabel(ylabel)
-
-    # Bottom performers
-    axes[1].barh(bottom_df[x_col], bottom_df[y_col], color='darkred', edgecolor='black')
-    axes[1].set_title(title_bottom, fontsize=14, fontweight="bold")
-    axes[1].set_xlabel(ylabel)
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-# Ensure data is available
-if df is not None:
-    df = df.sort_values("date")
-    min_date = df["date"].min().date()
-    max_date = df["date"].max().date()
-
-    st.title("MILV Daily Productivity")
-
-    tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
-
-    # **TAB 1: Latest Day**
-    with tab1:
-        st.subheader(f"📅 Data for {max_date.strftime('%B %d, %Y')}")
-        
-        df_latest = df[df["date"] == pd.Timestamp(max_date)]
-
-        if df_latest.empty:
-            st.warning("⚠️ No data available for the latest date.")
-        else:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Points", df_latest["points"].sum())
-            with col2:
-                st.metric("Total Procedures", df_latest["procedure"].sum())
-            with col3:
-                st.metric("Avg Points/Half-Day", f"{df_latest['points_half_day'].mean():.2f}")
-
-            # **Searchable Data Table**
-            st.subheader("🔍 Searchable Detailed Data")
-            search_query = st.text_input("Search for a provider (Tab 1):")
-            df_filtered = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)] if search_query else df_latest
-            st.dataframe(df_filtered.drop(columns=["points_half_day"]), use_container_width=True, height=400)
-
-            st.subheader("📊 Data Visualizations")
-
-            plot_split_chart(df_filtered, "author", "points_half_day", "Top 10 Providers by Points/Half-Day", 
-                             "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
-
-    # **TAB 2: Date Range Analysis**
-    with tab2:
-        st.subheader("📊 Select Date Range for Analysis")
-
-        date_selection = st.date_input(
-            "Select Date Range",
-            value=(max_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            key="date_selector"
+def display_metrics(df, prefix=""):
+    """Display standardized metrics in columns."""
+    cols = st.columns(3)
+    metrics = {
+        "Total Points": df["points"].sum(),
+        "Total Procedures": df["procedure"].sum(),
+        "Avg Points/Half-Day": df["points_half_day"].mean()
+    }
+    
+    for (title, value), col in zip(metrics.items(), cols):
+        col.metric(
+            label=f"{prefix}{title}",
+            value=f"{value:,.2f}" if isinstance(value, float) else f"{value:,}"
         )
 
-        if isinstance(date_selection, tuple) and len(date_selection) == 2:
-            start_date, end_date = map(pd.to_datetime, date_selection)
-        elif isinstance(date_selection, pd.Timestamp):
-            start_date = end_date = pd.to_datetime(date_selection)
+def plot_interactive_trend(df):
+    """Display time series trend of daily metrics."""
+    daily = df.groupby("date").agg({
+        'points': 'sum',
+        'procedure': 'sum',
+        'points_half_day': 'mean'
+    }).reset_index()
+
+    fig = px.line(
+        daily, x="date", y=daily.columns[1:],
+        title="Daily Trends Over Time",
+        labels={'value': 'Metric Value', 'variable': 'Metrics'},
+        height=400
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def plot_enhanced_split_chart(df, x_col, y_col, titles, ylabel):
+    """Enhanced visualization with Plotly."""
+    df_sorted = df.dropna(subset=[y_col]).sort_values(y_col, ascending=False)
+    if df_sorted.empty:
+        st.warning("⚠️ Insufficient data for visualization")
+        return
+
+    fig = px.bar(
+        df_sorted, x=y_col, y=x_col, 
+        orientation='h', text=y_col,
+        color=y_col, color_continuous_scale='Viridis'
+    )
+    fig.update_layout(
+        title=f"{titles[0]} | {titles[1]}",
+        yaxis_title="Provider",
+        xaxis_title=ylabel,
+        height=600
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# ---- UI Components ----
+def render_file_upload():
+    """Render file upload section."""
+    st.sidebar.image("milv.png", width=250)
+    st.sidebar.title("Upload Daily RVU File")
+    return st.sidebar.file_uploader("Upload RVU Excel File", type=["xlsx"])
+
+def render_data_table(df, search_key):
+    """Render searchable data table with consistency."""
+    search = st.text_input(f"Search provider ({search_key}):")
+    if search:
+        df = df[df["author"].str.contains(search, case=False, na=False)]
+    st.dataframe(
+        df.drop(columns=["points_half_day"]),
+        use_container_width=True,
+        height=400,
+        hide_index=True
+    )
+
+# ---- Main App Logic ----
+def main():
+    # File handling
+    uploaded_file = render_file_upload()
+    if uploaded_file:
+        try:
+            pd.read_excel(uploaded_file).to_excel(FILE_STORAGE_PATH, index=False)
+            st.success("✅ File processed successfully!")
+        except Exception as e:
+            st.error(f"Upload failed: {str(e)}")
+    
+    # Data loading
+    df = load_data(FILE_STORAGE_PATH) if os.path.exists(FILE_STORAGE_PATH) else None
+    if df is None:
+        return st.info("ℹ️ Please upload a file to begin")
+
+    # Date range calculation
+    min_date, max_date = df["date"].min().date(), df["date"].max().date()
+    
+    st.title("MILV Daily Productivity")
+    tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
+
+    with tab1:
+        st.subheader(f"📅 Data for {max_date.strftime('%B %d, %Y')}")
+        latest_df = df[df["date"] == pd.Timestamp(max_date)]
+        
+        if not latest_df.empty:
+            display_metrics(latest_df)
+            render_data_table(latest_df, "tab1")
+            plot_enhanced_split_chart(
+                latest_df, "author", "points_half_day",
+                ["Top Performers", "Points per Half-Day"], "Points/Half-Day"
+            )
         else:
-            st.error("⚠️ Please select a valid date range before proceeding.")
-            st.stop()
+            st.warning("⚠️ No data for latest date")
 
-        if start_date > end_date:
-            st.error("❌ End date must be after or the same as the start date.")
-            st.stop()
-
-        df_filtered = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
-
-        st.subheader(f"📊 Data for {start_date.strftime('%B %d, %Y')} to {end_date.strftime('%B %d, %Y')}")
-
-        if df_filtered.empty:
-            st.warning("⚠️ No data available for the selected filters.")
+    with tab2:
+        st.subheader("📊 Date Range Analysis")
+        start, end = st.date_input(
+            "Select Range", value=(max_date, max_date),
+            min_value=min_date, max_value=max_date
+        )
+        
+        range_df = df[df["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
+        if not range_df.empty:
+            display_metrics(range_df, "Cumulative ")
+            render_data_table(range_df, "tab2")
+            plot_interactive_trend(range_df)
+            plot_enhanced_split_chart(
+                range_df, "author", "points_half_day",
+                ["Performance Overview", "Points per Half-Day"], "Points/Half-Day"
+            )
         else:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Points", df_filtered["points"].sum())
-            with col2:
-                st.metric("Total Procedures", df_filtered["procedure"].sum())
-            with col3:
-                st.metric("Avg Points/Half-Day", f"{df_filtered['points_half_day'].mean():.2f}")
+            st.warning("⚠️ No data in selected range")
 
-            st.subheader("🔍 Searchable Detailed Data")
-            search_query_2 = st.text_input("Search for a provider (Tab 2):")
-            df_filtered = df_filtered[df_filtered["author"].str.contains(search_query_2, case=False, na=False)] if search_query_2 else df_filtered
-            st.dataframe(df_filtered.drop(columns=["points_half_day"]), use_container_width=True, height=400)
-
-            st.subheader("📊 Data Visualizations")
-
-            plot_split_chart(df_filtered, "author", "points_half_day", "Top 10 Providers by Points/Half-Day", 
-                             "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
+if __name__ == "__main__":
+    main()
