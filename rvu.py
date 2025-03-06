@@ -202,4 +202,6 @@ if df is not None:
                 st.metric("Avg Turnaround", f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A")
 
             # Visualizations
-            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending
+            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)", horizontal=True)
+            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points", horizontal=False)
+            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures", horizontal=False)
