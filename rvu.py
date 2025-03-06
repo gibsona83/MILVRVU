@@ -99,7 +99,7 @@ def create_trend_chart(df, date_col, metrics):
         value_name='Value'
     )
 
-    # Create a line chart (restored for clarity)
+    # Create a line chart
     fig = px.line(
         trend_df_melted,
         x='date_only',
@@ -111,7 +111,6 @@ def create_trend_chart(df, date_col, metrics):
         markers=True
     )
 
-    # Formatting updates
     fig.update_traces(
         line=dict(width=3),
         marker_size=8,
@@ -122,7 +121,7 @@ def create_trend_chart(df, date_col, metrics):
     fig.update_layout(
         xaxis=dict(
             tickformat="%b %d",
-            rangeslider=dict(visible=False),  # Keep slider off to avoid duplication
+            rangeslider=dict(visible=False),
             gridcolor='#F0F2F6'
         ),
         yaxis=dict(
@@ -134,6 +133,7 @@ def create_trend_chart(df, date_col, metrics):
     )
 
     return fig
+
 # ---- Main Application ----
 def main():
     st.sidebar.image("milv.png", width=250)
@@ -155,73 +155,44 @@ def main():
     max_date = df["date"].max().date()
     
     st.title("MILV Daily Productivity")
-    tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
+    tab1, tab2, tab3 = st.tabs(["📅 Daily View", "📊 Provider Analysis", "📈 Trend Analysis"])
     
-    # TAB 1: Latest Day
     with tab1:
         st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
         df_latest = df[df["date"] == pd.Timestamp(max_date)]
+        st.dataframe(df_latest, use_container_width=True)
 
-        if not df_latest.empty:
-            # Searchable Table
-            search_query = st.text_input("Search Providers:")
-            if search_query:
-                df_latest = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)]
-
-            st.dataframe(df_latest, use_container_width=True)
-
-            st.subheader("📊 Performance")
-            col1, col2 = st.columns(2)
-            with col1:
-                fig = create_performance_chart(df_latest, "points/half day", "author", "Points per Half-Day")
-                st.plotly_chart(fig, use_container_width=True)
-            with col2:
-                fig = create_performance_chart(df_latest, "procedure/half", "author", "Procedures per Half-Day")
-                st.plotly_chart(fig, use_container_width=True)
-
-    # TAB 2: Trend Analysis
     with tab2:
+        st.subheader("📊 Provider Performance Analysis")
+
+        # Date Range Selection
+        date_range = st.date_input("Select Date Range", [max_date - pd.DateOffset(days=7), max_date], min_value=min_date, max_value=max_date)
+        
+        if len(date_range) != 2 or date_range[0] > date_range[1]:
+            st.error("❌ Please select a valid date range.")
+            return
+
+        df_prov = df[df["date"].between(pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1]))]
+
+        # Provider Selection
+        all_providers = df_prov["author"].unique()
+        selected_providers = st.multiselect("Select Providers", all_providers, default=all_providers)
+
+        # If all are deselected, reselect all
+        if not selected_providers:
+            selected_providers = all_providers
+
+        df_prov = df_prov[df_prov["author"].isin(selected_providers)]
+        st.dataframe(df_prov, use_container_width=True)
+
+        # Display Performance Charts
+        st.plotly_chart(create_performance_chart(df_prov, "points/half day", "author", "Points per Half-Day"))
+        st.plotly_chart(create_performance_chart(df_prov, "procedure/half", "author", "Procedures per Half-Day"))
+
+    with tab3:
         st.subheader("📈 Trends Over Time")
-        
-        # Date range selection
-        dates = st.date_input(
-            "Select Date Range",
-            value=[max_date - pd.DateOffset(days=7), max_date],
-            min_value=min_date,
-            max_value=max_date
-        )
-
-        if len(dates) != 2:
-            st.error("❌ Please select both start and end dates")
-            st.stop()
-        if dates[0] > dates[1]:
-            st.error("❌ End date must be after start date")
-            st.stop()
-
-        start, end = dates
-        df_range = df[df["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
-
-        if df_range.empty:
-            st.warning("⚠️ No data available for the selected date range.")
-            st.stop()
-
-        trend_metrics = ["points/half day", "procedure/half"]
-        valid_metrics = [col for col in trend_metrics if col in df_range.columns]
-
-        if valid_metrics:
-            trend_fig = create_trend_chart(df_range, "date", ["points/half day", "procedure/half"])
-            if trend_fig:
-                st.plotly_chart(trend_fig, use_container_width=True)
-        else:
-            st.warning("⚠️ No valid metrics available for trend analysis.")
-
-        # Searchable Table
-        st.subheader("🔍 Filtered Data")
-        search_query = st.text_input("Search Providers in Trends:")
-        if search_query:
-            df_range = df_range[df_range["author"].str.contains(search_query, case=False, na=False)]
-        
-        st.dataframe(df_range, use_container_width=True)
+        trend_fig = create_trend_chart(df, "date", ["points/half day", "procedure/half"])
+        st.plotly_chart(trend_fig)
 
 if __name__ == "__main__":
     main()
