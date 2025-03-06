@@ -48,7 +48,7 @@ def load_data(file_path):
         return None
 
 def create_performance_chart(df, metric_col, author_col, title):
-    """Create descending sorted bar chart."""
+    """Create descending sorted bar chart for provider-level performance."""
     df_sorted = df.sort_values(metric_col, ascending=False)
     
     fig = px.bar(
@@ -85,13 +85,13 @@ def create_trend_chart(df, date_col, metrics):
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data by date (ensures one record per date)
-    trend_df = df.groupby('date_only', as_index=False)[metrics].mean()
+    # Aggregate data by date
+    trend_df = df.groupby('date_only', as_index=False)[metrics].sum()
 
     if trend_df.empty:
         return None
 
-    # Melt the dataframe to long format for Plotly
+    # Melt the dataframe for Plotly
     trend_df_melted = trend_df.melt(
         id_vars=['date_only'],
         value_vars=metrics,
@@ -105,8 +105,8 @@ def create_trend_chart(df, date_col, metrics):
         x='date_only',
         y='Value',
         color='Metric',
-        title="Daily Performance Trends",
-        labels={'date_only': 'Date', 'Value': 'Average Value'},
+        title="Aggregate Performance Trends",
+        labels={'date_only': 'Date', 'Value': 'Total Value'},
         height=500,
         markers=True
     )
@@ -156,56 +156,44 @@ def main():
     
     st.title("MILV Daily Productivity")
     tab1, tab2, tab3 = st.tabs(["📅 Daily View", "📊 Provider Analysis", "📈 Trend Analysis"])
-    
+
+    # Daily View (Default to most recent date)
     with tab1:
-        st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
+        st.subheader("📊 Daily Provider Performance")
         df_latest = df[df["date"] == pd.Timestamp(max_date)]
         st.dataframe(df_latest, use_container_width=True)
 
-        st.plotly_chart(create_trend_chart(df_latest, "date", ["points/half day", "procedure/half"]))
+        st.plotly_chart(create_performance_chart(df_latest, "points/half day", "author", "Points per Half-Day"))
+        st.plotly_chart(create_performance_chart(df_latest, "procedure/half", "author", "Procedures per Half-Day"))
 
+    # Provider Analysis (Date & Provider Filtering)
     with tab2:
-        st.subheader("📊 Provider Performance Analysis")
-
-        # Date Range Selection
+        st.subheader("📊 Provider Analysis Over Time")
         date_range = st.date_input("Select Date Range", [max_date - pd.DateOffset(days=7), max_date], min_value=min_date, max_value=max_date)
-        
+
         if len(date_range) != 2 or date_range[0] > date_range[1]:
             st.error("❌ Please select a valid date range.")
             return
 
         df_prov = df[df["date"].between(pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1]))]
 
-        # Provider Selection as a Dropdown
+        # Provider Selection (Dropdown Searchable)
         selected_providers = st.multiselect("Select Providers", df_prov["author"].unique(), default=df_prov["author"].unique())
 
-        # If all providers are deselected, reset to all
         if not selected_providers:
             selected_providers = df_prov["author"].unique()
 
         df_prov = df_prov[df_prov["author"].isin(selected_providers)]
         st.dataframe(df_prov, use_container_width=True)
 
-        # Display Performance Charts
-        st.plotly_chart(create_trend_chart(df_prov, "date", ["points/half day", "procedure/half"]))
+        st.plotly_chart(create_performance_chart(df_prov, "points/half day", "author", "Points per Half-Day"))
+        st.plotly_chart(create_performance_chart(df_prov, "procedure/half", "author", "Procedures per Half-Day"))
 
+    # Aggregate Trends
     with tab3:
-        st.subheader("📈 Trends Over Time")
-
-        # Date range selection
-        dates = st.date_input("Select Date Range", [max_date - pd.DateOffset(days=7), max_date], min_value=min_date, max_value=max_date)
-
-        if len(dates) != 2:
-            st.error("❌ Please select both start and end dates")
-            st.stop()
-
-        df_range = df[df["date"].between(pd.Timestamp(dates[0]), pd.Timestamp(dates[1]))]
-
-        if df_range.empty:
-            st.warning("⚠️ No data available for the selected date range.")
-            st.stop()
-
-        st.plotly_chart(create_trend_chart(df_range, "date", ["points/half day", "procedure/half"]))
+        st.subheader("📈 Aggregate Trends Over Time")
+        trend_fig = create_trend_chart(df, "date", ["points/half day", "procedure/half"])
+        st.plotly_chart(trend_fig)
 
 if __name__ == "__main__":
     main()
