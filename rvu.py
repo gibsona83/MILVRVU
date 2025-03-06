@@ -24,7 +24,7 @@ if not os.path.exists(IMAGE_PATH):
                 f.write(response.content)
     except Exception as e:
         st.warning(f"⚠️ Could not download the image: {str(e)}")
-        IMAGE_PATH = None  # Prevents using a broken image
+        IMAGE_PATH = None
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
@@ -95,13 +95,16 @@ def create_performance_chart(df, metric_col, author_col, title):
     fig.update_yaxes(autorange="reversed")
     return fig
 
-def create_trend_chart(df, date_col, metrics):
-    """Create a clean time series line chart with proper aggregation."""
+def create_trend_chart(df, date_col, metrics, agg_type="sum"):
+    """Create a clean time series line chart with aggregation (sum or avg)."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data by date (ensures one record per date)
-    trend_df = df.groupby('date_only', as_index=False)[metrics].mean()
+    # Aggregate data by date (Sum for totals, Mean for averages)
+    if agg_type == "sum":
+        trend_df = df.groupby('date_only', as_index=False)[metrics].sum()
+    else:
+        trend_df = df.groupby('date_only', as_index=False)[metrics].mean()
 
     if trend_df.empty:
         return None
@@ -120,8 +123,8 @@ def create_trend_chart(df, date_col, metrics):
         x='date_only',
         y='Value',
         color='Metric',
-        title="Daily Performance Trends",
-        labels={'date_only': 'Date', 'Value': 'Average Value'},
+        title="Performance Trends Over Time",
+        labels={'date_only': 'Date', 'Value': 'Metric Value'},
         height=500,
         markers=True
     )
@@ -175,27 +178,28 @@ def main():
     
     st.title("MILV Daily Productivity")
     tab1, tab2, tab3 = st.tabs(["📅 Daily View", "📊 Provider Performance", "📈 Trend Analysis"])
-    
-    with tab1:
-        st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
-        df_latest = df[df["date"] == pd.Timestamp(max_date)]
-        st.dataframe(df_latest, use_container_width=True)
 
     with tab2:
         st.subheader("📊 Provider Performance Over Time")
         date_range = st.date_input("Select Date Range", [max_date - pd.DateOffset(days=7), max_date], min_value=min_date, max_value=max_date)
+
+        if len(date_range) != 2 or date_range[0] > date_range[1]:
+            st.error("❌ Please select a valid date range.")
+            return
+
         df_prov = df[df["date"].between(pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1]))]
+
+        search_prov = st.multiselect("Select Providers", df_prov["author"].unique(), default=df_prov["author"].unique())
+        df_prov = df_prov[df_prov["author"].isin(search_prov)]
 
         st.metric("Avg Points/Half Day", f"{df_prov['points/half day'].mean():.2f}")
         st.metric("Avg Procedures/Half Day", f"{df_prov['procedure/half'].mean():.2f}")
 
-        st.subheader("📊 Provider Performance Comparison")
-        st.plotly_chart(create_performance_chart(df_prov, "points/half day", "author", "Avg Points per Half-Day"))
-        st.plotly_chart(create_performance_chart(df_prov, "procedure/half", "author", "Avg Procedures per Half-Day"))
+        st.plotly_chart(create_trend_chart(df_prov, "date", ["points/half day", "procedure/half"], agg_type="mean"))
 
     with tab3:
         st.subheader("📈 Trends Over Time")
-        trend_fig = create_trend_chart(df, "date", ["points/half day", "procedure/half"])
+        trend_fig = create_trend_chart(df, "date", ["points/half day", "procedure/half"], agg_type="sum")
         st.plotly_chart(trend_fig)
 
 if __name__ == "__main__":
