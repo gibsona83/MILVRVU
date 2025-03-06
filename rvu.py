@@ -1,32 +1,29 @@
 import streamlit as st
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
-import plotly.express as px  # Added for interactive visualizations
+import plotly.express as px
 
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Constants
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
-REQUIRED_COLUMNS = {"date", "author", "points", "procedure", "shift"}
-METRIC_COLUMNS = ["points", "procedure", "points_half_day"]
+REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
+                    "points/half day", "procedure/half"}
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
 def load_data(file_path):
     """Load and preprocess data from Excel file with caching."""
     try:
-        xls = pd.ExcelFile(file_path)
-        df = xls.parse(xls.sheet_names[0])
+        df = pd.read_excel(file_path)
         
-        # Clean column names
-        df.columns = df.columns.str.strip().str.lower()
-        df['author'] = df['author'].str.strip().str.lower()  # Normalize author names
+        # Clean column names (handle spaces and special characters)
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_', regex=False).str.replace('/', '_', regex=False)
         
         # Validate required columns
-        if missing := REQUIRED_COLUMNS - set(df.columns):
-            st.error(f"❌ Missing columns: {', '.join(missing)}")
+        if missing := REQUIRED_COLUMNS - set(df.columns.str.lower().str.replace(' ', '_').str.replace('/', '_')):
+            st.error(f"❌ Missing required columns: {', '.join(missing)}")
             return None
 
         # Convert and filter dates
@@ -37,13 +34,11 @@ def load_data(file_path):
             st.warning(f"⚠️ Removed {diff} rows with invalid dates")
 
         # Convert numeric columns
-        df[["points", "procedure", "shift"]] = df[["points", "procedure", "shift"]].apply(
-            pd.to_numeric, errors='coerce'
-        ).fillna(0)
+        numeric_cols = ["points", "procedure", "shift", "points_half_day", "procedure_half"]
+        df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
 
-        # Calculate metrics
-        df = df.query("shift > 0").copy()  # Filter valid shifts
-        df["points_half_day"] = df["points"] / df["shift"]
+        # Preserve original author name formatting
+        df["author"] = df["author"].astype(str).str.strip()
         
         return df.sort_values("date")
     except Exception as e:
@@ -52,11 +47,12 @@ def load_data(file_path):
 
 def display_metrics(df, prefix=""):
     """Display standardized metrics in columns."""
-    cols = st.columns(3)
+    cols = st.columns(4)
     metrics = {
         "Total Points": df["points"].sum(),
         "Total Procedures": df["procedure"].sum(),
-        "Avg Points/Half-Day": df["points_half_day"].mean()
+        "Points/Half-Day": df["points_half_day"].mean(),
+        "Procedures/Half-Day": df["procedure_half"].mean()
     }
     
     for (title, value), col in zip(metrics.items(), cols):
@@ -65,39 +61,64 @@ def display_metrics(df, prefix=""):
             value=f"{value:,.2f}" if isinstance(value, float) else f"{value:,}"
         )
 
-def plot_interactive_trend(df):
-    """Display time series trend of daily metrics."""
-    daily = df.groupby("date").agg({
-        'points': 'sum',
-        'procedure': 'sum',
-        'points_half_day': 'mean'
-    }).reset_index()
-
-    fig = px.line(
-        daily, x="date", y=daily.columns[1:],
-        title="Daily Trends Over Time",
-        labels={'value': 'Metric Value', 'variable': 'Metrics'},
-        height=400
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-def plot_enhanced_split_chart(df, x_col, y_col, titles, ylabel):
-    """Enhanced visualization with Plotly."""
+def plot_performance_chart(df, y_col, title):
+    """Create interactive performance chart with proper sorting."""
     df_sorted = df.dropna(subset=[y_col]).sort_values(y_col, ascending=False)
+    
     if df_sorted.empty:
         st.warning("⚠️ Insufficient data for visualization")
         return
 
     fig = px.bar(
-        df_sorted, x=y_col, y=x_col, 
-        orientation='h', text=y_col,
-        color=y_col, color_continuous_scale='Viridis'
-    )
-    fig.update_layout(
-        title=f"{titles[0]} | {titles[1]}",
-        yaxis_title="Provider",
-        xaxis_title=ylabel,
+        df_sorted, 
+        x=y_col, 
+        y="author", 
+        orientation='h',
+        text=y_col,
+        color=y_col,
+        color_continuous_scale='Viridis',
+        title=title,
         height=600
+    )
+    
+    fig.update_layout(
+        yaxis={'categoryorder': 'total descending'},
+        xaxis_title=y_col.replace('_', ' ').title(),
+        yaxis_title="Provider",
+        hovermode='y unified',
+        coloraxis_colorbar=dict(title=y_col.replace('_', ' ').title())
+    )
+    
+    fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    st.plotly_chart(fig, use_container_width=True)
+
+def plot_interactive_trend(df):
+    """Display time series trend of daily metrics."""
+    daily = df.groupby("date").agg({
+        'points': 'sum',
+        'procedure': 'sum',
+        'points_half_day': 'mean',
+        'procedure_half': 'mean'
+    }).reset_index().sort_values('date')
+
+    fig = px.line(
+        daily, 
+        x="date", 
+        y=["points_half_day", "procedure_half"],
+        title="Daily Efficiency Trends",
+        labels={'value': 'Metric Value', 'variable': 'Metrics'},
+        height=400
+    )
+    
+    fig.update_xaxes(
+        rangeslider_visible=True,
+        rangeselector=dict(
+            buttons=list([
+                dict(count=7, label="1w", step="day", stepmode="backward"),
+                dict(count=1, label="1m", step="month", stepmode="backward"),
+                dict(step="all")
+            ])
+        )
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -114,7 +135,10 @@ def render_data_table(df, search_key):
     if search:
         df = df[df["author"].str.contains(search, case=False, na=False)]
     st.dataframe(
-        df.drop(columns=["points_half_day"]),
+        df.rename(columns={
+            "points_half_day": "Points/Half Day",
+            "procedure_half": "Procedures/Half Day"
+        }),
         use_container_width=True,
         height=400,
         hide_index=True
@@ -149,10 +173,12 @@ def main():
         if not latest_df.empty:
             display_metrics(latest_df)
             render_data_table(latest_df, "tab1")
-            plot_enhanced_split_chart(
-                latest_df, "author", "points_half_day",
-                ["Top Performers", "Points per Half-Day"], "Points/Half-Day"
-            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                plot_performance_chart(latest_df, "points_half_day", "Points per Half-Day")
+            with col2:
+                plot_performance_chart(latest_df, "procedure_half", "Procedures per Half-Day")
         else:
             st.warning("⚠️ No data for latest date")
 
@@ -168,10 +194,12 @@ def main():
             display_metrics(range_df, "Cumulative ")
             render_data_table(range_df, "tab2")
             plot_interactive_trend(range_df)
-            plot_enhanced_split_chart(
-                range_df, "author", "points_half_day",
-                ["Performance Overview", "Points per Half-Day"], "Points/Half-Day"
-            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                plot_performance_chart(range_df, "points_half_day", "Points per Half-Day")
+            with col2:
+                plot_performance_chart(range_df, "procedure_half", "Procedures per Half-Day")
         else:
             st.warning("⚠️ No data in selected range")
 
