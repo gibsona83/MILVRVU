@@ -19,28 +19,25 @@ def load_data(file_path):
         xls = pd.ExcelFile(file_path)
         df = xls.parse(xls.sheet_names[0])
         
-        # Clean column names (case-insensitive)
-        df.columns = df.columns.str.strip()
-        lower_columns = df.columns.str.lower()
-        
+        # Clean and standardize column names
+        df.columns = df.columns.str.strip().str.lower()  # Normalize column names
+        col_map = {col: col for col in df.columns}  # Store original names
+
         # Validate required columns
-        missing = [col for col in REQUIRED_COLUMNS if col not in lower_columns]
+        missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
         if missing:
-            st.error(f"❌ Missing columns: {', '.join(missing).title()}")
+            st.error(f"❌ Missing columns: {', '.join(missing)}. Please check your uploaded file.")
             return None
-        
-        # Map actual column names
-        col_map = {col.lower(): col for col in df.columns}
-        
+
         # Process date column
         date_col = col_map["date"]
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
         df = df.dropna(subset=[date_col])
-        
+
         # Convert numeric columns
-        numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col not in ["date", "author"]]
+        numeric_cols = [col for col in REQUIRED_COLUMNS if col not in ["date", "author"]]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
-        
+
         # Format author names
         author_col = col_map["author"]
         df[author_col] = df[author_col].astype(str).str.strip().str.title()
@@ -85,17 +82,14 @@ def create_performance_chart(df, metric_col, author_col, title):
 
 def create_trend_chart(df, date_col, metrics):
     """Create a time series trend chart with enhanced visibility."""
-    # Ensure numeric data and valid dates
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
     
-    # Aggregate and clean data
     trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
     
     if trend_df.empty:
         return None
     
-    # Create figure with bold lines and markers
     fig = px.line(
         trend_df,
         x='date_only',
@@ -107,7 +101,6 @@ def create_trend_chart(df, date_col, metrics):
         line_shape='linear'
     )
     
-    # Enhance line visibility
     fig.update_traces(
         line_width=4,
         marker_size=10,
@@ -115,7 +108,6 @@ def create_trend_chart(df, date_col, metrics):
         marker_line_color='black'
     )
     
-    # Format axes
     fig.update_xaxes(
         tickformat="%b %d",
         rangeslider_visible=True,
@@ -131,11 +123,9 @@ def create_trend_chart(df, date_col, metrics):
 
 # ---- Main Application ----
 def main():
-    # File upload
     st.sidebar.image("milv.png", width=250)
     uploaded_file = st.sidebar.file_uploader("Upload RVU File", type=["xlsx"])
     
-    # Data loading
     if uploaded_file:
         try:
             df_uploaded = pd.read_excel(uploaded_file)
@@ -148,13 +138,8 @@ def main():
     if df is None:
         return st.info("ℹ️ Please upload a file")
     
-    # Get display columns
-    col_map = {col.lower(): col for col in df.columns}
-    display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
-    
-    # Date range setup
-    min_date = df[display_cols["date"]].min().date()
-    max_date = df[display_cols["date"]].max().date()
+    min_date = df["date"].min().date()
+    max_date = df["date"].max().date()
     
     st.title("MILV Daily Productivity")
     tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
@@ -162,7 +147,7 @@ def main():
     # TAB 1: Latest Day
     with tab1:
         st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
-        df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
+        df_latest = df[df["date"] == pd.Timestamp(max_date)]
 
         if not df_latest.empty:
             st.dataframe(df_latest, use_container_width=True)
@@ -184,17 +169,17 @@ def main():
             return
 
         start, end = dates
-        df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
+        df_range = df[df["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
 
         if df_range.empty:
             st.warning("⚠️ No data available for the selected date range.")
             return
 
-        trend_metrics = [display_cols["points/half day"], display_cols["procedure/half"]]
+        trend_metrics = ["points/half day", "procedure/half"]
         valid_metrics = [col for col in trend_metrics if col in df_range.columns]
 
         if valid_metrics:
-            trend_fig = create_trend_chart(df_range, display_cols["date"], valid_metrics)
+            trend_fig = create_trend_chart(df_range, "date", valid_metrics)
             if trend_fig:
                 st.plotly_chart(trend_fig, use_container_width=True)
         else:
