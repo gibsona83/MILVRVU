@@ -228,36 +228,46 @@ if df is not None:
                                            "Procedures per Half-Day (Descending Order)")
                 st.plotly_chart(fig, use_container_width=True)
 
-    # TAB 2: Date Range Analysis
-    with tab2:
-        st.subheader("📊 Select Date Range")
-        date_selection = st.date_input(
-            "Select Range",
-            value=(max_date, max_date),
-            min_value=min_date,
-            max_value=max_date
-        )
+    # Inside Tab 2 code
+with tab2:
+    st.subheader("📊 Date Range Analysis")
+    
+    # Create session state to persist date selection
+    if 'date_range' not in st.session_state:
+        st.session_state.date_range = [max_date, max_date]
 
-        if len(date_selection) == 2:
-            start_date, end_date = date_selection
-            df_range = df[(df[display_cols["date"]] >= pd.Timestamp(start_date)) & 
-                         (df[display_cols["date"]] <= pd.Timestamp(end_date))]
+    # Enhanced date input with validation
+    date_selection = st.date_input(
+        "Select Date Range (Start - End)",
+        value=tuple(st.session_state.date_range),
+        min_value=min_date,
+        max_value=max_date,
+        key="date_range_selector",
+        help="Click calendar icon or type dates in YYYY-MM-DD format",
+        on_change=lambda: st.session_state.update({"data_loaded": False})
+    )
+
+    # Handle date input validation
+    if len(date_selection) == 2:
+        start_date, end_date = date_selection
+        if start_date > end_date:
+            st.error("❌ End date must be after start date")
+            st.stop()
             
-            if not df_range.empty:
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Points", df_range[display_cols["points"]].sum())
-                with col2:
-                    st.metric("Total Procedures", df_range[display_cols["procedure"]].sum())
-                with col3:
-                    st.metric("Avg Points/Half-Day", f"{df_range[display_cols['points/half day']].mean():.2f}")
-                with col4:
-                    st.metric("Avg Procedures/Half-Day", f"{df_range[display_cols['procedure/half']].mean():.2f}")
-
-                st.subheader("🔍 Searchable Data")
-                search_query = st.text_input("Search for a provider (Tab 2):")
-                filtered_range = df_range[df_range[display_cols["author"]].str.contains(search_query, case=False, na=False)] if search_query else df_range
-                st.dataframe(filtered_range, use_container_width=True, height=400)
+        df_range = df[(df[display_cols["date"] >= pd.Timestamp(start_date)) & 
+                     (df[display_cols["date"] <= pd.Timestamp(end_date))]
+        
+        if not df_range.empty:
+            # ... [rest of your existing tab2 code] ...
+            
+        else:
+            st.warning("⚠️ No data in selected range")
+    elif len(date_selection) == 1:
+        st.info("ℹ️ Please select both start and end dates")
+        st.stop()
+    else:
+        st.warning("⚠️ Please select a valid date range")
+        st.stop()
 
                 st.subheader("📊 Performance Analysis")
                 col1, col2 = st.columns(2)
