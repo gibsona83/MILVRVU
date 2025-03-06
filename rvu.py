@@ -66,22 +66,32 @@ elif os.path.exists(FILE_STORAGE_PATH):
 else:
     df = None
 
-# Function to plot bar charts
-def plot_bar_chart(df, x_col, y_col, title, ylabel):
-    """Generates a horizontal bar chart for better readability."""
+# Function to plot top/bottom charts
+def plot_split_chart(df, x_col, y_col, title_top, title_bottom, ylabel):
+    """Generates two sorted bar charts for better readability."""
 
-    df_sorted = df.sort_values(by=y_col, ascending=False)
+    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)
 
     if df_sorted.empty:
-        st.warning(f"⚠️ No valid data available for {title}.")
+        st.warning(f"⚠️ No valid data available for {title_top} and {title_bottom}.")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.barh(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+    # Get top and bottom performers
+    top_df = df_sorted.head(10)   # Top 10
+    bottom_df = df_sorted.tail(10) # Bottom 10
 
-    ax.set_xlabel(ylabel, fontsize=12)
-    ax.set_ylabel("Providers", fontsize=12)
-    ax.set_title(title, fontsize=14, fontweight="bold")
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+    # Top performers
+    axes[0].barh(top_df[x_col], top_df[y_col], color='darkblue', edgecolor='black')
+    axes[0].set_title(title_top, fontsize=14, fontweight="bold")
+    axes[0].invert_yaxis()
+    axes[0].set_xlabel(ylabel)
+
+    # Bottom performers
+    axes[1].barh(bottom_df[x_col], bottom_df[y_col], color='darkred', edgecolor='black')
+    axes[1].set_title(title_bottom, fontsize=14, fontweight="bold")
+    axes[1].set_xlabel(ylabel)
 
     plt.tight_layout()
     st.pyplot(fig)
@@ -120,8 +130,11 @@ if df is not None:
 
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_latest, "last_name", "points_half_day", "Points per Half-Day (Descending)", "Points per Half-Day")
-            plot_bar_chart(df_latest, "last_name", "procedures_half_day", "Procedures per Half-Day (Descending)", "Procedures per Half-Day")
+            plot_split_chart(df_latest, "last_name", "points_half_day", "Top 10 Providers by Points/Half-Day", 
+                             "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
+
+            plot_split_chart(df_latest, "last_name", "procedures_half_day", "Top 10 Providers by Procedures/Half-Day", 
+                             "Bottom 10 Providers by Procedures/Half-Day", "Procedures per Half-Day")
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -182,5 +195,8 @@ if df is not None:
 
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_filtered, "last_name", "points_half_day", "Points per Half-Day (Descending)", "Points per Half-Day")
-            plot_bar_chart(df_filtered, "last_name", "procedures_half_day", "Procedures per Half-Day (Descending)", "Procedures per Half-Day")
+            plot_split_chart(df_filtered, "last_name", "points_half_day", "Top 10 Providers by Points/Half-Day", 
+                             "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
+
+            plot_split_chart(df_filtered, "last_name", "procedures_half_day", "Top 10 Providers by Procedures/Half-Day", 
+                             "Bottom 10 Providers by Procedures/Half-Day", "Procedures per Half-Day")
