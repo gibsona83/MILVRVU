@@ -80,47 +80,44 @@ def create_performance_chart(df, metric_col, author_col, title):
     fig.update_yaxes(autorange="reversed")
     return fig
 
-def create_trend_chart(df, date_col, metrics):
-    """Create a time series trend chart with proper daily aggregation."""
+ddef create_trend_chart(df, date_col, metrics):
+    """Create an area chart for performance trends to avoid duplication."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
-    
+
     # Aggregate data by date (average across all providers)
     trend_df = df.groupby('date_only', as_index=False)[metrics].mean()
-    
+
     if trend_df.empty:
         return None
 
-    # Melt dataframe to long format for Plotly
+    # Melt the dataframe to long format for Plotly
     trend_df_melted = trend_df.melt(
-        id_vars=['date_only'], 
+        id_vars=['date_only'],
         value_vars=metrics,
-        var_name='Metric', 
+        var_name='Metric',
         value_name='Value'
     )
 
-    # Create line chart with enhanced styling
-    fig = px.line(
+    # Create an area chart (fixing duplication issue)
+    fig = px.area(
         trend_df_melted,
         x='date_only',
         y='Value',
         color='Metric',
         title="Daily Performance Trends",
         labels={'date_only': 'Date', 'Value': 'Average Value'},
-        height=500,
-        markers=True,
-        line_shape='linear',
-        color_discrete_sequence=['#FF4B4B', '#0068C9']
+        height=500
     )
 
     # Formatting updates
     fig.update_traces(
-        line_width=3,
-        marker_size=8,
+        line=dict(width=2),
+        opacity=0.5,  # Add transparency for better visualization
         marker_line_width=1.5,
         marker_line_color='black'
     )
-    
+
     fig.update_layout(
         xaxis=dict(
             tickformat="%b %d",
@@ -134,8 +131,9 @@ def create_trend_chart(df, date_col, metrics):
         plot_bgcolor='white',
         hovermode='x unified'
     )
-    
+
     return fig
+
 # ---- Main Application ----
 def main():
     st.sidebar.image("milv.png", width=250)
