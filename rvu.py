@@ -81,37 +81,61 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a time series trend chart with correct aggregation."""
+    """Create a time series trend chart with proper daily aggregation."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
-
-    # Aggregate data per date
-    trend_df = df.groupby(['date_only'])[metrics].mean().reset_index().dropna()
-
+    
+    # Aggregate data by date (average across all providers)
+    trend_df = df.groupby('date_only', as_index=False)[metrics].mean()
+    
     if trend_df.empty:
         return None
 
-    # Melt the dataframe to long format for Plotly
-    trend_df_melted = trend_df.melt(id_vars=['date_only'], var_name='Metric', value_name='Value')
+    # Melt dataframe to long format for Plotly
+    trend_df_melted = trend_df.melt(
+        id_vars=['date_only'], 
+        value_vars=metrics,
+        var_name='Metric', 
+        value_name='Value'
+    )
 
-    # Create line chart
+    # Create line chart with enhanced styling
     fig = px.line(
         trend_df_melted,
         x='date_only',
         y='Value',
         color='Metric',
-        title="Performance Trends Over Time",
-        labels={'date_only': 'Date', 'Value': 'Metric Value'},
+        title="Daily Performance Trends",
+        labels={'date_only': 'Date', 'Value': 'Average Value'},
         height=500,
-        markers=True
+        markers=True,
+        line_shape='linear',
+        color_discrete_sequence=['#FF4B4B', '#0068C9']
     )
 
-    fig.update_traces(line_width=2, marker_size=6, marker_line_width=1.5)
-    fig.update_xaxes(tickformat="%b %d", rangeslider_visible=True)
-    fig.update_yaxes(tickformat=".2f")
-
+    # Formatting updates
+    fig.update_traces(
+        line_width=3,
+        marker_size=8,
+        marker_line_width=1.5,
+        marker_line_color='black'
+    )
+    
+    fig.update_layout(
+        xaxis=dict(
+            tickformat="%b %d",
+            rangeslider_visible=True,
+            gridcolor='#F0F2F6'
+        ),
+        yaxis=dict(
+            tickformat=".2f",
+            gridcolor='#F0F2F6'
+        ),
+        plot_bgcolor='white',
+        hovermode='x unified'
+    )
+    
     return fig
-
 # ---- Main Application ----
 def main():
     st.sidebar.image("milv.png", width=250)
@@ -187,7 +211,7 @@ def main():
         valid_metrics = [col for col in trend_metrics if col in df_range.columns]
 
         if valid_metrics:
-            trend_fig = create_trend_chart(df_range, "date", valid_metrics)
+            trend_fig = create_trend_chart(df_range, "date", ["points/half day", "procedure/half"])
             if trend_fig:
                 st.plotly_chart(trend_fig, use_container_width=True)
         else:
