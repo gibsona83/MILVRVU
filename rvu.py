@@ -34,6 +34,10 @@ def load_data(file_path):
         # Convert date column
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
         df = df.dropna(subset=["date"])
+
+        # Convert numeric columns
+        for col in ["points", "procedure", "turnaround"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce")  # Invalid values become NaN
         
         return df
     except Exception as e:
@@ -92,7 +96,9 @@ if df is not None:
             with col2:
                 st.metric("Total Procedures", df_latest["procedure"].sum())
             with col3:
-                st.metric("Avg Turnaround", f"{df_latest['turnaround'].mean():.1f} min")
+                avg_turnaround = df_latest["turnaround"].mean()
+                avg_turnaround_display = f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A"
+                st.metric("Avg Turnaround", avg_turnaround_display)
 
             # Data Table
             st.subheader("🔍 Detailed Data")
@@ -164,7 +170,9 @@ if df is not None:
             with col2:
                 st.metric("Total Procedures", df_filtered["procedure"].sum())
             with col3:
-                st.metric("Avg Turnaround", f"{df_filtered['turnaround'].mean():.1f} min")
+                avg_turnaround = df_filtered["turnaround"].mean()
+                avg_turnaround_display = f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A"
+                st.metric("Avg Turnaround", avg_turnaround_display)
 
             # Data Table
             st.subheader("🔍 Detailed Data")
