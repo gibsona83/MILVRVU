@@ -93,6 +93,25 @@ def plot_split_chart(df, x_col, y_col, title_top, title_bottom, ylabel):
     plt.tight_layout()
     st.pyplot(fig)
 
+# Function to plot average trends over time
+def plot_average_trends(df, y_col, title, ylabel):
+    """Generates a trend line chart for average values over time."""
+    df_avg = df.groupby("date")[y_col].mean()
+
+    if df_avg.empty:
+        st.warning(f"⚠️ Not enough valid data for {title}.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    df_avg.plot(kind="line", marker="o", ax=ax, color="darkgreen")
+
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.set_xlabel("Date")
+    ax.set_ylabel(ylabel)
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+
+    st.pyplot(fig)
+
 # Ensure data is available
 if df is not None:
     df = df.sort_values("date")
@@ -120,15 +139,9 @@ if df is not None:
             with col3:
                 st.metric("Avg Points/Half-Day", f"{df_latest['points_half_day'].mean():.2f}")
 
-            # **Searchable Data Table**
-            st.subheader("🔍 Searchable Detailed Data")
-            search_query = st.text_input("Search for a provider (Tab 1):")
-            df_filtered = df_latest[df_latest["author"].str.contains(search_query, case=False, na=False)] if search_query else df_latest
-            st.dataframe(df_filtered.drop(columns=["points_half_day"]), use_container_width=True, height=400)
-
             st.subheader("📊 Data Visualizations")
 
-            plot_split_chart(df_filtered, "author", "points_half_day", "Top 10 Providers by Points/Half-Day", 
+            plot_split_chart(df_latest, "author", "points_half_day", "Top 10 Providers by Points/Half-Day", 
                              "Bottom 10 Providers by Points/Half-Day", "Points per Half-Day")
 
     # **TAB 2: Date Range Analysis**
@@ -170,10 +183,10 @@ if df is not None:
             with col3:
                 st.metric("Avg Points/Half-Day", f"{df_filtered['points_half_day'].mean():.2f}")
 
-            st.subheader("🔍 Searchable Detailed Data")
-            search_query_2 = st.text_input("Search for a provider (Tab 2):")
-            df_filtered = df_filtered[df_filtered["author"].str.contains(search_query_2, case=False, na=False)] if search_query_2 else df_filtered
-            st.dataframe(df_filtered.drop(columns=["points_half_day"]), use_container_width=True, height=400)
+            st.subheader("📊 Aggregate Trends Over Time")
+
+            plot_average_trends(df_filtered, "points_half_day", "Average Points/Half-Day Over Time", "Avg Points/Half-Day")
+            plot_average_trends(df_filtered, "procedure", "Average Procedures Over Time", "Avg Procedures")
 
             st.subheader("📊 Data Visualizations")
 
