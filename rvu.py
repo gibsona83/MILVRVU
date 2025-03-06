@@ -81,7 +81,7 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a clean time series line chart with proper aggregation."""
+    """Create a clean and improved time series line chart."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
@@ -99,34 +99,34 @@ def create_trend_chart(df, date_col, metrics):
         value_name='Value'
     )
 
-    # Create a line chart
+    # Create an improved line chart
     fig = px.line(
         trend_df_melted,
         x='date_only',
         y='Value',
         color='Metric',
-        title="Aggregate Performance Trends",
+        title="📈 Aggregate Performance Trends",
         labels={'date_only': 'Date', 'Value': 'Total Value'},
         height=500,
-        markers=True
+        markers=True,
+        line_shape='spline',  # Makes the graph smoother
+        color_discrete_sequence=["#1f77b4", "#ff7f0e"]
     )
 
     fig.update_traces(
         line=dict(width=3),
-        marker_size=8,
-        marker_line_width=1.5,
-        marker_line_color='black'
+        marker=dict(size=6, symbol='circle', opacity=0.8),
     )
 
     fig.update_layout(
         xaxis=dict(
             tickformat="%b %d",
-            rangeslider=dict(visible=False),
-            gridcolor='#F0F2F6'
+            rangeslider=dict(visible=True),
+            gridcolor='#EAEAEA'
         ),
         yaxis=dict(
             tickformat=".2f",
-            gridcolor='#F0F2F6'
+            gridcolor='#EAEAEA'
         ),
         plot_bgcolor='white',
         hovermode='x unified'
@@ -169,6 +169,8 @@ def main():
     # Provider Analysis (Date & Provider Filtering)
     with tab2:
         st.subheader("📊 Provider Analysis Over Time")
+
+        # Date Range Selection
         date_range = st.date_input("Select Date Range", [max_date - pd.DateOffset(days=7), max_date], min_value=min_date, max_value=max_date)
 
         if len(date_range) != 2 or date_range[0] > date_range[1]:
@@ -177,8 +179,13 @@ def main():
 
         df_prov = df[df["date"].between(pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1]))]
 
-        # Provider Selection (Dropdown Searchable)
-        selected_providers = st.multiselect("Select Providers", df_prov["author"].unique(), default=df_prov["author"].unique())
+        # Provider Selection as a Dropdown with Search
+        with st.expander("🔍 Select Providers (Default: All)"):
+            selected_providers = st.multiselect(
+                "Search and Select Providers",
+                df_prov["author"].unique(),
+                default=df_prov["author"].unique()
+            )
 
         if not selected_providers:
             selected_providers = df_prov["author"].unique()
