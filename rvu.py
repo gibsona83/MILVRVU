@@ -59,20 +59,37 @@ else:
     df = None
 
 # Function to improve visualization
-def plot_bar_chart(df, x_col, y_col, title, ylabel):
-    """Generates a sorted bar chart with better readability."""
-    df_sorted = df.sort_values(by=y_col, ascending=True)  # Sorting for better clarity
+def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
+    """Generates a sorted bar chart with improved readability."""
     
-    fig, ax = plt.subplots(figsize=(12, 5))  # Increase figure size for better visibility
-    ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+    # Ensure numeric conversion and drop NaNs
+    df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
+    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=True)
+
+    # Handle cases where no valid data exists
+    if df_sorted.empty:
+        st.warning(f"⚠️ No valid data available for {title}.")
+        return
+
+    fig, ax = plt.subplots(figsize=(14, 6))  # Increased size for better readability
+    
+    if horizontal:
+        ax.barh(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+        ax.set_xlabel(ylabel, fontsize=12)
+        ax.set_ylabel("Providers", fontsize=12)
+    else:
+        ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+        ax.set_ylabel(ylabel, fontsize=12)
     
     # Aesthetics
     ax.set_title(title, fontsize=14, fontweight="bold")
-    ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_xticks(range(len(df_sorted[x_col])))
-    ax.set_xticklabels(df_sorted[x_col], rotation=45, ha="right", fontsize=10)  # Rotate labels for clarity
+
+    if len(df_sorted[x_col]) > 10:
+        if horizontal:
+            ax.set_yticklabels(df_sorted[x_col], fontsize=10)
+        else:
+            ax.set_xticklabels(df_sorted[x_col], rotation=45, ha="right", fontsize=10)  # Rotate labels for clarity
     
-    # Add grid for better readability
     ax.grid(axis='y', linestyle='--', alpha=0.7)
 
     # Show plot
@@ -115,9 +132,9 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_latest, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)")
-            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Ascending)", "Points")
-            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
+            plot_bar_chart(df_latest, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)", horizontal=True)
+            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Ascending)", "Points", horizontal=False)
+            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures", horizontal=False)
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -181,13 +198,7 @@ if df is not None:
                 avg_turnaround = df_filtered["turnaround"].mean()
                 st.metric("Avg Turnaround", f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A")
 
-            # Data Table
-            st.subheader("🔍 Detailed Data")
-            st.dataframe(df_filtered, use_container_width=True, height=400)
-
-            # **Visualizations**
-            st.subheader("📊 Data Visualizations")
-
-            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)")
-            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points")
-            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
+            # Visualizations
+            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)", horizontal=True)
+            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points", horizontal=False)
+            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures", horizontal=False)
