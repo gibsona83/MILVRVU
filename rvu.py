@@ -6,10 +6,9 @@ import matplotlib.pyplot as plt
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# Sidebar - MILV Logo
-st.sidebar.image("milv.png", width=250)
-
-st.title("📊 MILV Daily Productivity")
+# Sidebar - File Upload
+st.sidebar.title("Upload File")
+uploaded_file = st.sidebar.file_uploader("Upload RVU Excel File", type=["xlsx"])
 
 # Define storage path
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
@@ -44,16 +43,7 @@ def load_data(file_path):
         st.error(f"Error loading file: {str(e)}")
         return None
 
-# Load existing data or initialize
-if os.path.exists(FILE_STORAGE_PATH):
-    df = load_data(FILE_STORAGE_PATH)
-    latest_file_status = "✅ Using last uploaded file."
-else:
-    df = None
-    latest_file_status = "⚠️ No previous file found."
-
-# File upload handling
-uploaded_file = st.file_uploader("Upload RVU Excel File (Optional)", type=["xlsx"])
+# Load existing data
 if uploaded_file:
     try:
         with open(FILE_STORAGE_PATH, "wb") as f:
@@ -63,27 +53,25 @@ if uploaded_file:
             st.success("✅ File uploaded successfully!")
     except Exception as e:
         st.error(f"Upload failed: {str(e)}")
+elif os.path.exists(FILE_STORAGE_PATH):
+    df = load_data(FILE_STORAGE_PATH)
+else:
+    df = None
 
 # Ensure data is available
 if df is not None:
-    st.sidebar.info(latest_file_status)
-    
-    if "date" not in df.columns:
-        st.error("❌ Missing 'date' column in data")
-        st.stop()
-
     # Sort by date and get min/max dates
     df = df.sort_values("date")
     min_date = df["date"].min().date()
     max_date = df["date"].max().date()
 
-    # Tab layout: Latest Day Data | Date Range Analysis
+    # Create Tabs
     tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
 
-    # **TAB 1: Automatically Load Latest Date**
+    # **TAB 1: Latest Date Data**
     with tab1:
         st.subheader(f"📅 Data for {max_date}")
-        
+
         df_latest = df[df["date"] == pd.Timestamp(max_date)]
 
         if df_latest.empty:
@@ -97,33 +85,46 @@ if df is not None:
                 st.metric("Total Procedures", df_latest["procedure"].sum())
             with col3:
                 avg_turnaround = df_latest["turnaround"].mean()
-                avg_turnaround_display = f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A"
-                st.metric("Avg Turnaround", avg_turnaround_display)
+                st.metric("Avg Turnaround", f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A")
 
             # Data Table
             st.subheader("🔍 Detailed Data")
-            st.dataframe(
-                df_latest.sort_values("turnaround", ascending=True),
-                use_container_width=True,
-                height=400
-            )
+            st.dataframe(df_latest, use_container_width=True, height=400)
 
-            # Visualization
+            # **Visualizations**
+            st.subheader("📊 Data Visualizations")
+
+            # Points per half-day
+            fig, ax = plt.subplots(figsize=(8, 4))
+            df_latest.groupby(df_latest["date"].dt.strftime('%p'))["points"].sum().plot(kind="bar", ax=ax)
+            ax.set_title("Points per Half-Day")
+            ax.set_ylabel("Points")
+            ax.grid(True)
+            st.pyplot(fig)
+
+            # Procedures per half-day
+            fig, ax = plt.subplots(figsize=(8, 4))
+            df_latest.groupby(df_latest["date"].dt.strftime('%p'))["procedure"].sum().plot(kind="bar", ax=ax)
+            ax.set_title("Procedures per Half-Day")
+            ax.set_ylabel("Procedures")
+            ax.grid(True)
+            st.pyplot(fig)
+
+            # Daily Trends
             fig, ax = plt.subplots(figsize=(10, 4))
-            daily_points = df_latest.groupby("date")["points"].sum()
-            daily_points.plot(kind="bar", ax=ax)
+            df.groupby("date")["points"].sum().plot(kind="line", ax=ax, marker="o")
             ax.set_title("Daily Points Overview")
             ax.grid(True)
             st.pyplot(fig)
 
-    # **TAB 2: Custom Date Range Selection**
+    # **TAB 2: Date Range Analysis**
     with tab2:
         st.subheader("📊 Select Date Range for Analysis")
 
-        # Date input for filtering
-        date_selection = st.sidebar.date_input(
+        # Date Input
+        date_selection = st.date_input(
             "Select Date Range",
-            value=(max_date, max_date) if min_date != max_date else max_date,
+            value=(max_date, max_date),
             min_value=min_date,
             max_value=max_date,
             key="date_selector"
@@ -137,12 +138,12 @@ if df is not None:
 
         # Validate date order
         if start_date > end_date:
-            st.sidebar.error("❌ End date must be after start date")
+            st.error("❌ End date must be after start date")
             st.stop()
 
         # Provider selection
         providers = df["author"].unique().tolist()
-        selected_providers = st.sidebar.multiselect(
+        selected_providers = st.multiselect(
             "Select Providers",
             options=["ALL"] + providers,
             default=["ALL"],
@@ -171,34 +172,34 @@ if df is not None:
                 st.metric("Total Procedures", df_filtered["procedure"].sum())
             with col3:
                 avg_turnaround = df_filtered["turnaround"].mean()
-                avg_turnaround_display = f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A"
-                st.metric("Avg Turnaround", avg_turnaround_display)
+                st.metric("Avg Turnaround", f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A")
 
             # Data Table
             st.subheader("🔍 Detailed Data")
-            st.dataframe(
-                df_filtered.sort_values("turnaround", ascending=True),
-                use_container_width=True,
-                height=400
-            )
+            st.dataframe(df_filtered, use_container_width=True, height=400)
 
-            # Download Button
-            csv = df_filtered.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "💾 Download Filtered Data",
-                data=csv,
-                file_name=f"MILV_data_{start_date.date()}_to_{end_date.date()}.csv",
-                mime="text/csv"
-            )
+            # **Visualizations**
+            st.subheader("📊 Data Visualizations")
 
-            # Visualization
-            st.subheader("📅 Daily Trends")
-            fig, ax = plt.subplots(figsize=(10, 4))
-            daily_points = df_filtered.groupby("date")["points"].sum()
-            daily_points.plot(kind="line", ax=ax, marker="o")
-            ax.set_title("Daily Points Overview")
+            # Points per half-day
+            fig, ax = plt.subplots(figsize=(8, 4))
+            df_filtered.groupby(df_filtered["date"].dt.strftime('%p'))["points"].sum().plot(kind="bar", ax=ax)
+            ax.set_title("Points per Half-Day")
+            ax.set_ylabel("Points")
             ax.grid(True)
             st.pyplot(fig)
 
-else:
-    st.warning("⚠️ Please upload an Excel file to begin analysis.")
+            # Procedures per half-day
+            fig, ax = plt.subplots(figsize=(8, 4))
+            df_filtered.groupby(df_filtered["date"].dt.strftime('%p'))["procedure"].sum().plot(kind="bar", ax=ax)
+            ax.set_title("Procedures per Half-Day")
+            ax.set_ylabel("Procedures")
+            ax.grid(True)
+            st.pyplot(fig)
+
+            # Daily Trends
+            fig, ax = plt.subplots(figsize=(10, 4))
+            df_filtered.groupby("date")["points"].sum().plot(kind="line", ax=ax, marker="o")
+            ax.set_title("Daily Points Overview")
+            ax.grid(True)
+            st.pyplot(fig)
