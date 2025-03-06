@@ -19,7 +19,7 @@ def load_data(file_path):
         xls = pd.ExcelFile(file_path)
         df = xls.parse(xls.sheet_names[0])
         
-        # Clean column names (case-insensitive)
+        # Clean column names
         df.columns = df.columns.str.strip()
         lower_columns = df.columns.str.lower()
         
@@ -101,36 +101,12 @@ def create_trend_chart(df, date_col, metrics):
         labels={'date_only': 'Date', 'value': 'Metric Value'},
         height=400,
         markers=True,
-        line_shape='linear',
-        color_discrete_sequence=['#FF4B4B', '#0068C9']
+        line_shape='linear'
     )
     
-    fig.update_traces(
-        line_width=4,
-        marker_size=10,
-        marker_line_width=2,
-        marker_line_color='black'
-    )
-    
-    fig.update_xaxes(
-        tickformat="%b %d",
-        rangeslider_visible=True,
-        gridcolor='#F0F2F6'
-    )
-    
-    fig.update_yaxes(
-        tickformat=".2f",
-        gridcolor='#F0F2F6'
-    )
-    
-    fig.update_layout(
-        hoverlabel=dict(
-            bgcolor="white",
-            font_size=16,
-            font_family="Arial"
-        ),
-        plot_bgcolor='white'
-    )
+    fig.update_traces(line_width=4, marker_size=10, marker_line_width=2)
+    fig.update_xaxes(tickformat="%b %d", rangeslider_visible=True)
+    fig.update_yaxes(tickformat=".2f")
     
     return fig
 
@@ -191,8 +167,48 @@ def main():
                 st.plotly_chart(create_performance_chart(filtered, display_cols["procedure/half"], 
                                                          display_cols["author"], "Procedures per Half-Day"), 
                                 use_container_width=True)
-    
-    # TAB 2: Trend Analysis (unchanged)
+
+    with tab2:
+        st.subheader("Date Range Analysis")
+
+        if 'date_range' not in st.session_state:
+            st.session_state.date_range = [max_date - pd.DateOffset(days=7), max_date]
+
+        dates = st.date_input(
+            "Select Range (Start - End)",
+            value=st.session_state.date_range,
+            min_value=min_date,
+            max_value=max_date
+        )
+
+        if len(dates) != 2 or dates[0] > dates[1]:
+            st.error("❌ Invalid date range selected.")
+            return
+
+        st.session_state.date_range = dates
+        start, end = dates
+
+        df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
+
+        if df_range.empty:
+            st.warning("⚠️ No data available for the selected date range.")
+            return
+
+        st.subheader("📈 Trends")
+        trend_metrics = [display_cols["points/half day"], display_cols["procedure/half"]]
+        valid_metrics = [col for col in trend_metrics if col in df_range.columns]
+
+        if valid_metrics:
+            trend_fig = create_trend_chart(df_range, display_cols["date"], valid_metrics)
+            if trend_fig:
+                st.plotly_chart(trend_fig, use_container_width=True)
+        else:
+            st.warning("No trend data available.")
+
+        st.subheader("🔍 Filtered Data")
+        search = st.text_input("Search providers (Trends):")
+        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
+        st.dataframe(filtered_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
