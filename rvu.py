@@ -79,13 +79,12 @@ def create_performance_chart(df, metric_col, author_col, title):
     )
     fig.update_yaxes(autorange="reversed")
     return fig
-
 def create_trend_chart(df, date_col, metrics):
-    """Create an area chart for performance trends to avoid duplication."""
+    """Create an area chart for performance trends without duplication in the slider."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data by date (average across all providers)
+    # Aggregate data by date (ensure one row per date)
     trend_df = df.groupby('date_only', as_index=False)[metrics].mean()
 
     if trend_df.empty:
@@ -99,7 +98,7 @@ def create_trend_chart(df, date_col, metrics):
         value_name='Value'
     )
 
-    # Create an area chart (fixing duplication issue)
+    # Create an area chart with proper transparency to avoid overlap
     fig = px.area(
         trend_df_melted,
         x='date_only',
@@ -113,7 +112,7 @@ def create_trend_chart(df, date_col, metrics):
     # Formatting updates
     fig.update_traces(
         line=dict(width=2),
-        opacity=0.5,  # Add transparency for better visualization
+        opacity=0.4,  # Reduce fill opacity to make it more readable
         marker_line_width=1.5,
         marker_line_color='black'
     )
@@ -121,7 +120,7 @@ def create_trend_chart(df, date_col, metrics):
     fig.update_layout(
         xaxis=dict(
             tickformat="%b %d",
-            rangeslider_visible=True,
+            rangeslider=dict(visible=False),  # Disable the duplicating rangeslider
             gridcolor='#F0F2F6'
         ),
         yaxis=dict(
@@ -133,7 +132,6 @@ def create_trend_chart(df, date_col, metrics):
     )
 
     return fig
-
 # ---- Main Application ----
 def main():
     st.sidebar.image("milv.png", width=250)
