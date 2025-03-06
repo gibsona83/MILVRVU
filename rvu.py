@@ -64,14 +64,15 @@ def load_data(file_path):
         st.error(f"Error loading file: {str(e)}")
         return None
 
-def create_sorted_bar_chart(df, metric_col, title):
+def create_sorted_bar_chart(df, metric_col, author_col, title):
     """Create a sorted horizontal bar chart with Plotly."""
+    # Sort descending and remove invalid entries
     sorted_df = df.sort_values(metric_col, ascending=False)
     
     fig = px.bar(
         sorted_df,
         x=metric_col,
-        y="Author",
+        y=author_col,
         orientation='h',
         text=metric_col,
         color=metric_col,
@@ -86,18 +87,26 @@ def create_sorted_bar_chart(df, metric_col, title):
         yaxis_title="Provider",
         hovermode='y unified',
         coloraxis_colorbar=dict(title=metric_col)
-    )  # Fixed closing parenthesis here
+    )
     
     fig.update_traces(
         texttemplate='%{text:.2f}',
         textposition='outside'
     )
     
+    # Reverse order to show highest at top
+    fig.update_yaxes(autorange="reversed")
+    
     return fig
 
 def create_trend_chart(df, date_col, metrics):
     """Create a time series trend chart."""
+    # Ensure numeric values and valid dates
     trend_df = df.groupby(date_col)[metrics].mean().reset_index()
+    trend_df = trend_df.dropna(subset=metrics)
+    
+    if trend_df.empty:
+        return None
     
     fig = px.line(
         trend_df,
@@ -182,12 +191,16 @@ if df is not None:
             st.subheader("📊 Performance Metrics")
             col1, col2 = st.columns(2)
             with col1:
-                fig = create_sorted_bar_chart(filtered, display_cols["points/half day"], 
-                                            "Points per Half-Day (Descending Order)")
+                fig = create_sorted_bar_chart(filtered, 
+                                           display_cols["points/half day"],
+                                           display_cols["author"],
+                                           "Points per Half-Day (Descending Order)")
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
-                fig = create_sorted_bar_chart(filtered, display_cols["procedure/half"], 
-                                            "Procedures per Half-Day (Descending Order)")
+                fig = create_sorted_bar_chart(filtered, 
+                                           display_cols["procedure/half"],
+                                           display_cols["author"],
+                                           "Procedures per Half-Day (Descending Order)")
                 st.plotly_chart(fig, use_container_width=True)
 
     # TAB 2: Date Range Analysis
@@ -224,11 +237,15 @@ if df is not None:
                 st.subheader("📊 Performance Analysis")
                 col1, col2 = st.columns(2)
                 with col1:
-                    fig = create_sorted_bar_chart(filtered_range, display_cols["points/half day"], 
+                    fig = create_sorted_bar_chart(filtered_range, 
+                                                display_cols["points/half day"],
+                                                display_cols["author"],
                                                 "Points per Half-Day Timeline")
                     st.plotly_chart(fig, use_container_width=True)
                 with col2:
-                    fig = create_sorted_bar_chart(filtered_range, display_cols["procedure/half"], 
+                    fig = create_sorted_bar_chart(filtered_range, 
+                                                display_cols["procedure/half"],
+                                                display_cols["author"],
                                                 "Procedures per Half-Day Timeline")
                     st.plotly_chart(fig, use_container_width=True)
                 
@@ -238,4 +255,7 @@ if df is not None:
                     display_cols["date"],
                     [display_cols["points/half day"], display_cols["procedure/half"]]
                 )
-                st.plotly_chart(trend_fig, use_container_width=True)
+                if trend_fig:
+                    st.plotly_chart(trend_fig, use_container_width=True)
+                else:
+                    st.warning("No trend data available for selected period")
