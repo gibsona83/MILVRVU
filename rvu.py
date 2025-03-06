@@ -38,7 +38,7 @@ def load_data(file_path):
         df = df.dropna(subset=[date_col])
         
         # Convert numeric columns
-        numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col != "date" and col != "author"]
+        numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col not in ["date", "author"]]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
         
         # Format author names
@@ -71,7 +71,7 @@ def create_performance_chart(df, metric_col, author_col, title):
         xaxis_title=metric_col,
         yaxis_title="Provider",
         hovermode='y unified',
-        coloraxis_colorbar=dict(title=metric_col),  # Added missing comma here
+        coloraxis_colorbar=dict(title=metric_col),  # Fixed comma here
     )
     
     fig.update_traces(
@@ -81,7 +81,47 @@ def create_performance_chart(df, metric_col, author_col, title):
         marker_line_color='black'
     )
     fig.update_yaxes(autorange="reversed")
-    return fig# ---- UI Components ----
+    return fig
+
+def create_trend_chart(df, date_col, metrics):
+    """Create enhanced time series chart."""
+    df = df.copy()
+    df['date_only'] = df[date_col].dt.date
+    
+    trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
+    if trend_df.empty:
+        return None
+    
+    fig = px.line(
+        trend_df,
+        x='date_only',
+        y=metrics,
+        title="Performance Trends",
+        labels={'date_only': 'Date', 'value': 'Value'},
+        height=400,
+        markers=True,
+        line_shape='linear',
+        color_discrete_sequence=['#FF4B4B', '#0068C9']
+    )
+    
+    fig.update_traces(
+        line_width=4,
+        marker_size=10,
+        marker_line_width=2,
+        marker_line_color='black'
+    )
+    
+    fig.update_xaxes(
+        tickformat="%b %d",
+        rangeslider_visible=True,
+        gridcolor='#F0F2F6'
+    )
+    
+    fig.update_yaxes(tickformat=".2f", gridcolor='#F0F2F6')
+    fig.update_layout(plot_bgcolor='white')
+    return fig
+
+# ---- Main Application ----
 def main():
     # File upload
     st.sidebar.image("milv.png", width=250)
@@ -136,11 +176,11 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 fig = create_performance_chart(filtered, display_cols["points/half day"], 
-                                             display_cols["author"], "Points per Half-Day")
+                                              display_cols["author"], "Points per Half-Day")
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
                 fig = create_performance_chart(filtered, display_cols["procedure/half"], 
-                                             display_cols["author"], "Procedures per Half-Day")
+                                              display_cols["author"], "Procedures per Half-Day")
                 st.plotly_chart(fig, use_container_width=True)
     
     # TAB 2: Trend Analysis
@@ -169,7 +209,7 @@ def main():
         
         st.session_state.date_range = dates
         start, end = dates
-        df_range = df[df[display_cols["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
+        df_range = df[df[display_cols["date"]].between(pd.Timestamp(start), pd.Timestamp(end))]
         
         if df_range.empty:
             st.warning("⚠️ No data in selected range")
