@@ -64,13 +64,14 @@ if df is not None:
     df = df.sort_values("date")
     min_date = df["date"].min().date()
     max_date = df["date"].max().date()
+    formatted_max_date = pd.to_datetime(max_date).strftime("%B %d, %Y")  # Format: "March 5, 2025"
 
     # Create Tabs
     tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
 
     # **TAB 1: Latest Date Data**
     with tab1:
-        st.subheader(f"📅 Data for {max_date}")
+        st.subheader(f"📅 Data for {formatted_max_date}")
 
         df_latest = df[df["date"] == pd.Timestamp(max_date)]
 
@@ -94,19 +95,21 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            # Points per half-day
+            # Points per half-day (by provider)
             fig, ax = plt.subplots(figsize=(8, 4))
-            df_latest.groupby(df_latest["date"].dt.strftime('%p'))["points"].sum().plot(kind="bar", ax=ax)
-            ax.set_title("Points per Half-Day")
+            df_latest.groupby(["author", df_latest["date"].dt.strftime('%p')])["points"].sum().unstack().plot(kind="bar", ax=ax)
+            ax.set_title("Points per Half-Day by Provider")
             ax.set_ylabel("Points")
+            ax.legend(title="Half-Day")
             ax.grid(True)
             st.pyplot(fig)
 
-            # Procedures per half-day
+            # Procedures per half-day (by provider)
             fig, ax = plt.subplots(figsize=(8, 4))
-            df_latest.groupby(df_latest["date"].dt.strftime('%p'))["procedure"].sum().plot(kind="bar", ax=ax)
-            ax.set_title("Procedures per Half-Day")
+            df_latest.groupby(["author", df_latest["date"].dt.strftime('%p')])["procedure"].sum().unstack().plot(kind="bar", ax=ax)
+            ax.set_title("Procedures per Half-Day by Provider")
             ax.set_ylabel("Procedures")
+            ax.legend(title="Half-Day")
             ax.grid(True)
             st.pyplot(fig)
 
@@ -136,6 +139,9 @@ if df is not None:
         else:
             start_date = end_date = pd.to_datetime(date_selection)
 
+        formatted_start_date = start_date.strftime("%B %d, %Y")
+        formatted_end_date = end_date.strftime("%B %d, %Y")
+
         # Validate date order
         if start_date > end_date:
             st.error("❌ End date must be after start date")
@@ -161,6 +167,8 @@ if df is not None:
         )
         df_filtered = df.loc[mask]
 
+        st.subheader(f"📊 Data for {formatted_start_date} to {formatted_end_date}")
+
         if df_filtered.empty:
             st.warning("⚠️ No data available for the selected filters.")
         else:
@@ -181,19 +189,21 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            # Points per half-day
+            # Points per half-day (by provider)
             fig, ax = plt.subplots(figsize=(8, 4))
-            df_filtered.groupby(df_filtered["date"].dt.strftime('%p'))["points"].sum().plot(kind="bar", ax=ax)
-            ax.set_title("Points per Half-Day")
+            df_filtered.groupby(["author", df_filtered["date"].dt.strftime('%p')])["points"].sum().unstack().plot(kind="bar", ax=ax)
+            ax.set_title("Points per Half-Day by Provider")
             ax.set_ylabel("Points")
+            ax.legend(title="Half-Day")
             ax.grid(True)
             st.pyplot(fig)
 
-            # Procedures per half-day
+            # Procedures per half-day (by provider)
             fig, ax = plt.subplots(figsize=(8, 4))
-            df_filtered.groupby(df_filtered["date"].dt.strftime('%p'))["procedure"].sum().plot(kind="bar", ax=ax)
-            ax.set_title("Procedures per Half-Day")
+            df_filtered.groupby(["author", df_filtered["date"].dt.strftime('%p')])["procedure"].sum().unstack().plot(kind="bar", ax=ax)
+            ax.set_title("Procedures per Half-Day by Provider")
             ax.set_ylabel("Procedures")
+            ax.legend(title="Half-Day")
             ax.grid(True)
             st.pyplot(fig)
 
