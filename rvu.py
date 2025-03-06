@@ -7,125 +7,152 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # Sidebar - MILV Logo
-st.sidebar.image("milv.png", width=250)  # Load logo in sidebar
+st.sidebar.image("milv.png", width=250)
 
 st.title("📊 MILV Daily Productivity")
 
-# Define storage path for the latest uploaded file
+# Define storage path
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
 
 def load_data(file_path):
-    """Loads data from an Excel file and ensures correct formatting."""
-    xls = pd.ExcelFile(file_path)
-    df = xls.parse(xls.sheet_names[0])
+    """Load and preprocess data from Excel file."""
+    try:
+        xls = pd.ExcelFile(file_path)
+        df = xls.parse(xls.sheet_names[0])
+        
+        # Clean column names
+        df.columns = df.columns.str.strip().str.lower()
+        
+        # Ensure required columns exist
+        required_columns = {"date", "author", "points", "procedure", "turnaround"}
+        missing_columns = required_columns - set(df.columns)
 
-    # Standardize column names
-    df.columns = df.columns.str.strip().str.lower()
-
-    # Convert "date" column
-    if "date" in df.columns:
+        if missing_columns:
+            st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
+            return None
+        
+        # Convert date column
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
-        df = df.dropna(subset=["date"])  # Drop invalid dates
+        df = df.dropna(subset=["date"])
+        
+        return df
+    except Exception as e:
+        st.error(f"Error loading file: {str(e)}")
+        return None
 
-    return df
-
-# Load last uploaded file if exists
+# Load existing data or initialize
 if os.path.exists(FILE_STORAGE_PATH):
     df = load_data(FILE_STORAGE_PATH)
     latest_file_status = "✅ Using last uploaded file."
 else:
     df = None
-    latest_file_status = "⚠️ No previously uploaded file found."
+    latest_file_status = "⚠️ No previous file found."
 
-# File Upload Section
-uploaded_file = st.file_uploader("Upload the RVU Excel File (Optional)", type=["xlsx"])
-
+# File upload handling
+uploaded_file = st.file_uploader("Upload RVU Excel File (Optional)", type=["xlsx"])
 if uploaded_file:
-    with open(FILE_STORAGE_PATH, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    df = load_data(FILE_STORAGE_PATH)
-    st.success("✅ File uploaded successfully! Using new file.")
+    try:
+        with open(FILE_STORAGE_PATH, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        df = load_data(FILE_STORAGE_PATH)
+        if df is not None:
+            st.success("✅ File uploaded successfully!")
+    except Exception as e:
+        st.error(f"Upload failed: {str(e)}")
 
-# If no upload, but previous file exists, load it
+# Main app logic
 if df is not None:
     st.sidebar.info(latest_file_status)
-
-    # Ensure "date" column exists before filtering
+    
     if "date" not in df.columns:
-        st.error("❌ The uploaded file does not contain a 'date' column. Please check your file.")
+        st.error("❌ Missing 'date' column in data")
         st.stop()
 
-    # Sidebar Filters
-    st.sidebar.subheader("📅 Filter Data")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
-    df = df.dropna(subset=["date"])  # Ensure no NaT values
-
+    # Date range handling
+    df = df.sort_values("date")
     min_date = df["date"].min().date()
-    latest_date = df["date"].max().date()
-    max_date = latest_date  # Most recent date in dataset
-
-    # Date range selector with latest date as default
+    max_date = df["date"].max().date()
+    
+    # Date input with latest date default
     date_selection = st.sidebar.date_input(
         "Select Date Range",
-        value=(latest_date, latest_date),
+        value=(max_date, max_date) if min_date != max_date else max_date,
         min_value=min_date,
-        max_value=max_date
+        max_value=max_date,
+        key="date_selector"
     )
 
-    # Handle date selection
-    start_date = pd.to_datetime(date_selection[0])
-    end_date = pd.to_datetime(date_selection[1])
+    # Handle date selection types
+    if isinstance(date_selection, tuple):
+        start_date, end_date = map(pd.to_datetime, date_selection)
+    else:
+        start_date = end_date = pd.to_datetime(date_selection)
 
     # Validate date order
     if start_date > end_date:
-        st.sidebar.error("Error: End date must be after start date")
+        st.sidebar.error("❌ End date must be after start date")
         st.stop()
 
-    # Sidebar - Provider Selection
-    st.sidebar.subheader("👩‍⚕️ Provider Selection")
+    # Provider selection
     providers = df["author"].unique().tolist()
-    all_option = "ALL Providers"
+    selected_providers = st.sidebar.multiselect(
+        "Select Providers",
+        options=["ALL"] + providers,
+        default=["ALL"],
+        key="provider_selector"
+    )
+    
+    if "ALL" in selected_providers:
+        selected_providers = providers
 
-    selected_providers = st.sidebar.multiselect("Select Provider(s)", [all_option] + providers, default=[all_option])
-
-    # Selection logic
-    if all_option in selected_providers or not selected_providers:
-        selected_providers = providers  # Select all providers
-
-    # Filtering data
-    df_filtered = df[
+    # Filter data
+    mask = (
         (df["date"] >= start_date) & 
         (df["date"] <= end_date) & 
         (df["author"].isin(selected_providers))
-    ]
-
-    # Aggregate Metrics
-    date_range_text = (
-        f"for {start_date.strftime('%Y-%m-%d')}" 
-        if start_date == end_date
-        else f"from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
     )
-    
-    st.subheader(f"📊 Aggregate Measures {date_range_text}")
-    
+    df_filtered = df.loc[mask]
+
+    # Handle empty filtered data
+    if df_filtered.empty:
+        st.warning("⚠️ No data available for the selected filters.")
+        st.stop()
+
+    # Metrics display
+    st.subheader("📈 Performance Metrics")
     col1, col2, col3 = st.columns(3)
-    col1.metric("🔢 Total Points", df_filtered["points"].sum())
-    col2.metric("🛠️ Total Procedures", df_filtered["procedure"].sum())
-    col3.metric("⏳ Avg Turnaround Time (min)", round(df_filtered["turnaround"].mean(), 2))
+    with col1:
+        st.metric("Total Points", df_filtered["points"].sum())
+    with col2:
+        st.metric("Total Procedures", df_filtered["procedure"].sum())
+    with col3:
+        st.metric("Avg Turnaround", f"{df_filtered['turnaround'].mean():.1f} min")
 
-    # Detailed Data Display
-    st.subheader("📄 Detailed Data Overview")
-    df_sorted = df_filtered.sort_values(by=["turnaround"], ascending=[True])
-    st.dataframe(df_sorted)
-
-    # Download Feature
-    csv = df_sorted.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        "📥 Download CSV",
-        csv,
-        f"MILV_Daily_Productivity_{start_date.date()}_to_{end_date.date()}.csv",
-        "text/csv"
+    # Data table
+    st.subheader("🔍 Detailed Data")
+    st.dataframe(
+        df_filtered.sort_values("turnaround", ascending=True),
+        use_container_width=True,
+        height=400
     )
+
+    # Download button
+    csv = df_filtered.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "💾 Download Filtered Data",
+        data=csv,
+        file_name=f"MILV_data_{start_date.date()}_to_{end_date.date()}.csv",
+        mime="text/csv"
+    )
+
+    # Optional visualization
+    st.subheader("📅 Daily Trends")
+    fig, ax = plt.subplots(figsize=(10, 4))
+    daily_points = df_filtered.groupby("date")["points"].sum()
+    daily_points.plot(kind="line", ax=ax, marker="o")
+    ax.set_title("Daily Points Overview")
+    ax.grid(True)
+    st.pyplot(fig)
 
 else:
-    st.warning("Please upload an Excel file to start analyzing data.")
+    st.warning("⚠️ Please upload an Excel file to begin analysis.")
