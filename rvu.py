@@ -60,12 +60,12 @@ else:
     df = None
 
 # Function to improve visualization
-def plot_bar_chart(df, x_col, y_col, title, ylabel):
+def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
     """Generates a sorted bar chart with improved readability."""
     
     # Ensure numeric conversion and drop NaNs
     df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
-    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=True)
+    df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)  # Now sorted DESCENDING
 
     # Handle cases where no valid data exists
     if df_sorted.empty:
@@ -73,15 +73,23 @@ def plot_bar_chart(df, x_col, y_col, title, ylabel):
         return
 
     fig, ax = plt.subplots(figsize=(14, 6))  # Increased size for better readability
-    
-    ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
-    ax.set_ylabel(ylabel, fontsize=12)
 
+    if horizontal:
+        ax.barh(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+        ax.set_xlabel(ylabel, fontsize=12)
+        ax.set_ylabel("Providers", fontsize=12)
+    else:
+        ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+        ax.set_ylabel(ylabel, fontsize=12)
+    
     # Aesthetics
     ax.set_title(title, fontsize=14, fontweight="bold")
 
     if len(df_sorted[x_col]) > 10:
-        ax.set_xticklabels(df_sorted[x_col], rotation=45, ha="right", fontsize=10)  # Rotate labels for clarity
+        if horizontal:
+            ax.set_yticklabels(df_sorted[x_col], fontsize=10)
+        else:
+            ax.set_xticklabels(df_sorted[x_col], rotation=30, ha="right", fontsize=10)  # Reduced rotation for better readability
     
     ax.grid(axis='y', linestyle='--', alpha=0.7)
 
@@ -125,8 +133,8 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Ascending)", "Points")
-            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
+            plot_bar_chart(df_latest, "author", "points", "Points per Provider (Descending)", "Points", horizontal=True)
+            plot_bar_chart(df_latest, "author", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -194,5 +202,5 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points")
-            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures")
+            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Descending)", "Points", horizontal=True)
+            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
