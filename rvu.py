@@ -36,8 +36,11 @@ def load_data(file_path):
 
         # Convert numeric columns
         for col in ["points", "procedure", "turnaround"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")  # Invalid values become NaN
+            df[col] = pd.to_numeric(df[col], errors="coerce")  # Convert non-numeric values to NaN
         
+        # Fill missing turnaround values with 0 (or another placeholder)
+        df["turnaround"] = df["turnaround"].fillna(0)
+
         return df
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
@@ -199,6 +202,4 @@ if df is not None:
                 st.metric("Avg Turnaround", f"{avg_turnaround:.1f} min" if pd.notna(avg_turnaround) else "N/A")
 
             # Visualizations
-            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending)", "Turnaround Time (minutes)", horizontal=True)
-            plot_bar_chart(df_filtered, "author", "points", "Points per Provider (Ascending)", "Points", horizontal=False)
-            plot_bar_chart(df_filtered, "author", "procedure", "Procedures per Provider (Ascending)", "Procedures", horizontal=False)
+            plot_bar_chart(df_filtered, "author", "turnaround", "Turnaround Times (Ascending
