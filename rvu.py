@@ -100,36 +100,61 @@ def create_sorted_bar_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a time series trend chart."""
-    # Ensure numeric values and valid dates
-    trend_df = df.groupby(date_col)[metrics].mean().reset_index()
-    trend_df = trend_df.dropna(subset=metrics)
+    """Create a time series trend chart with enhanced visibility."""
+    # Ensure numeric data and valid dates
+    df = df.copy()
+    df['date_only'] = df[date_col].dt.date
+    
+    # Aggregate and clean data
+    trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
     
     if trend_df.empty:
         return None
     
+    # Create figure with bold lines and markers
     fig = px.line(
         trend_df,
-        x=date_col,
+        x='date_only',
         y=metrics,
         title="Performance Trends Over Time",
-        labels={'value': 'Metric Value', 'variable': 'Metrics'},
-        height=400
+        labels={'date_only': 'Date', 'value': 'Metric Value'},
+        height=400,
+        markers=True,  # Add data point markers
+        line_shape='linear',  # Straight line segments between points
+        color_discrete_sequence=['#FF4B4B', '#0068C9']  # High-contrast colors
     )
     
+    # Enhance line visibility
+    fig.update_traces(
+        line_width=4,  # Thicker lines
+        marker_size=10,  # Larger markers
+        marker_line_width=2,
+        marker_line_color='black'
+    )
+    
+    # Format axes
     fig.update_xaxes(
+        tickformat="%b %d",  # Month + day format
         rangeslider_visible=True,
-        rangeselector=dict(
-            buttons=list([
-                dict(count=7, label="1w", step="day", stepmode="backward"),
-                dict(count=1, label="1m", step="month", stepmode="backward"),
-                dict(step="all")
-            ])
-        )
+        gridcolor='#F0F2F6'
+    )
+    
+    fig.update_yaxes(
+        tickformat=".2f",
+        gridcolor='#F0F2F6'
+    )
+    
+    # Add direct labels
+    fig.update_layout(
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=16,
+            font_family="Arial"
+        ),
+        plot_bgcolor='white'
     )
     
     return fig
-
 # Load existing data
 if uploaded_file:
     try:
