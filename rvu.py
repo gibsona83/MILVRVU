@@ -80,19 +80,19 @@ def create_performance_chart(df, metric_col, author_col, title):
     fig.update_yaxes(autorange="reversed")
     return fig
 
-def create_trend_chart(df, date_col, author_col, metrics):
+def create_trend_chart(df, date_col, metrics):
     """Create a time series trend chart with correct aggregation, avoiding duplicates."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data per date and provider (ensures no duplicate stacking)
-    trend_df = df.groupby(['date_only', author_col])[metrics].sum().reset_index().dropna()
+    # Aggregate data per date (ensures no duplicate stacking)
+    trend_df = df.groupby('date_only')[metrics].sum().reset_index().dropna()
 
     if trend_df.empty:
         return None
 
     # Melt the dataframe to long format for Plotly
-    trend_df_melted = trend_df.melt(id_vars=['date_only', author_col], var_name='Metric', value_name='Value')
+    trend_df_melted = trend_df.melt(id_vars=['date_only'], var_name='Metric', value_name='Value')
 
     # Create line chart
     fig = px.line(
