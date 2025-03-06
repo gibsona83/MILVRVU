@@ -80,33 +80,34 @@ def create_performance_chart(df, metric_col, author_col, title):
     fig.update_yaxes(autorange="reversed")
     return fig
 
-def create_trend_chart(df, date_col, metrics):
+def create_trend_chart(df, date_col, author_col, metrics):
     """Create a time series trend chart with correct aggregation, avoiding duplicates."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data per date (ensures no duplicate stacking)
-    trend_df = df.groupby('date_only')[metrics].sum().reset_index().dropna()
+    # Aggregate data per date and provider (ensures no duplicate stacking)
+    trend_df = df.groupby(['date_only', author_col])[metrics].mean().reset_index().dropna()
 
     if trend_df.empty:
         return None
 
     # Melt the dataframe to long format for Plotly
-    trend_df_melted = trend_df.melt(id_vars=['date_only'], var_name='Metric', value_name='Value')
+    trend_df_melted = trend_df.melt(id_vars=['date_only', author_col], var_name='Metric', value_name='Value')
 
     # Create line chart
     fig = px.line(
         trend_df_melted,
         x='date_only',
         y='Value',
-        color='Metric',
+        color=author_col,  # Ensure separate lines per provider
+        line_group='Metric',
         title="Performance Trends Over Time",
-        labels={'date_only': 'Date', 'Value': 'Metric Value'},
-        height=400,
+        labels={'date_only': 'Date', 'Value': 'Metric Value', author_col: 'Provider'},
+        height=500,
         markers=True
     )
 
-    fig.update_traces(line_width=3, marker_size=8, marker_line_width=2)
+    fig.update_traces(line_width=2, marker_size=6, marker_line_width=1.5)
     fig.update_xaxes(tickformat="%b %d", rangeslider_visible=True)
     fig.update_yaxes(tickformat=".2f")
 
