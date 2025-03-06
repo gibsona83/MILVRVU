@@ -60,7 +60,7 @@ if uploaded_file:
     except Exception as e:
         st.error(f"Upload failed: {str(e)}")
 
-# Main app logic
+# Ensure data is available
 if df is not None:
     st.sidebar.info(latest_file_status)
     
@@ -68,91 +68,129 @@ if df is not None:
         st.error("❌ Missing 'date' column in data")
         st.stop()
 
-    # Date range handling
+    # Sort by date and get min/max dates
     df = df.sort_values("date")
     min_date = df["date"].min().date()
     max_date = df["date"].max().date()
-    
-    # Date input with latest date default
-    date_selection = st.sidebar.date_input(
-        "Select Date Range",
-        value=(max_date, max_date) if min_date != max_date else max_date,
-        min_value=min_date,
-        max_value=max_date,
-        key="date_selector"
-    )
 
-    # Handle date selection types
-    if isinstance(date_selection, tuple):
-        start_date, end_date = map(pd.to_datetime, date_selection)
-    else:
-        start_date = end_date = pd.to_datetime(date_selection)
+    # Tab layout: Latest Day Data | Date Range Analysis
+    tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
 
-    # Validate date order
-    if start_date > end_date:
-        st.sidebar.error("❌ End date must be after start date")
-        st.stop()
+    # **TAB 1: Automatically Load Latest Date**
+    with tab1:
+        st.subheader(f"📅 Data for {max_date}")
+        
+        df_latest = df[df["date"] == pd.Timestamp(max_date)]
 
-    # Provider selection
-    providers = df["author"].unique().tolist()
-    selected_providers = st.sidebar.multiselect(
-        "Select Providers",
-        options=["ALL"] + providers,
-        default=["ALL"],
-        key="provider_selector"
-    )
-    
-    if "ALL" in selected_providers:
-        selected_providers = providers
+        if df_latest.empty:
+            st.warning("⚠️ No data available for the latest date.")
+        else:
+            # Metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Points", df_latest["points"].sum())
+            with col2:
+                st.metric("Total Procedures", df_latest["procedure"].sum())
+            with col3:
+                st.metric("Avg Turnaround", f"{df_latest['turnaround'].mean():.1f} min")
 
-    # Filter data
-    mask = (
-        (df["date"] >= start_date) & 
-        (df["date"] <= end_date) & 
-        (df["author"].isin(selected_providers))
-    )
-    df_filtered = df.loc[mask]
+            # Data Table
+            st.subheader("🔍 Detailed Data")
+            st.dataframe(
+                df_latest.sort_values("turnaround", ascending=True),
+                use_container_width=True,
+                height=400
+            )
 
-    # Handle empty filtered data
-    if df_filtered.empty:
-        st.warning("⚠️ No data available for the selected filters.")
-        st.stop()
+            # Visualization
+            fig, ax = plt.subplots(figsize=(10, 4))
+            daily_points = df_latest.groupby("date")["points"].sum()
+            daily_points.plot(kind="bar", ax=ax)
+            ax.set_title("Daily Points Overview")
+            ax.grid(True)
+            st.pyplot(fig)
 
-    # Metrics display
-    st.subheader("📈 Performance Metrics")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Points", df_filtered["points"].sum())
-    with col2:
-        st.metric("Total Procedures", df_filtered["procedure"].sum())
-    with col3:
-        st.metric("Avg Turnaround", f"{df_filtered['turnaround'].mean():.1f} min")
+    # **TAB 2: Custom Date Range Selection**
+    with tab2:
+        st.subheader("📊 Select Date Range for Analysis")
 
-    # Data table
-    st.subheader("🔍 Detailed Data")
-    st.dataframe(
-        df_filtered.sort_values("turnaround", ascending=True),
-        use_container_width=True,
-        height=400
-    )
+        # Date input for filtering
+        date_selection = st.sidebar.date_input(
+            "Select Date Range",
+            value=(max_date, max_date) if min_date != max_date else max_date,
+            min_value=min_date,
+            max_value=max_date,
+            key="date_selector"
+        )
 
-    # Download button
-    csv = df_filtered.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "💾 Download Filtered Data",
-        data=csv,
-        file_name=f"MILV_data_{start_date.date()}_to_{end_date.date()}.csv",
-        mime="text/csv"
-    )
+        # Handle date selection
+        if isinstance(date_selection, tuple):
+            start_date, end_date = map(pd.to_datetime, date_selection)
+        else:
+            start_date = end_date = pd.to_datetime(date_selection)
 
-    # Optional visualization
-    st.subheader("📅 Daily Trends")
-    fig, ax = plt.subplots(figsize=(10, 4))
-    daily_points = df_filtered.groupby("date")["points"].sum()
-    daily_points.plot(kind="line", ax=ax, marker="o")
-    ax.set_title("Daily Points Overview")
-    ax.grid(True)
-    st.pyplot(fig)
+        # Validate date order
+        if start_date > end_date:
+            st.sidebar.error("❌ End date must be after start date")
+            st.stop()
+
+        # Provider selection
+        providers = df["author"].unique().tolist()
+        selected_providers = st.sidebar.multiselect(
+            "Select Providers",
+            options=["ALL"] + providers,
+            default=["ALL"],
+            key="provider_selector"
+        )
+
+        if "ALL" in selected_providers:
+            selected_providers = providers
+
+        # Filter data
+        mask = (
+            (df["date"] >= start_date) & 
+            (df["date"] <= end_date) & 
+            (df["author"].isin(selected_providers))
+        )
+        df_filtered = df.loc[mask]
+
+        if df_filtered.empty:
+            st.warning("⚠️ No data available for the selected filters.")
+        else:
+            # Metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Points", df_filtered["points"].sum())
+            with col2:
+                st.metric("Total Procedures", df_filtered["procedure"].sum())
+            with col3:
+                st.metric("Avg Turnaround", f"{df_filtered['turnaround'].mean():.1f} min")
+
+            # Data Table
+            st.subheader("🔍 Detailed Data")
+            st.dataframe(
+                df_filtered.sort_values("turnaround", ascending=True),
+                use_container_width=True,
+                height=400
+            )
+
+            # Download Button
+            csv = df_filtered.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "💾 Download Filtered Data",
+                data=csv,
+                file_name=f"MILV_data_{start_date.date()}_to_{end_date.date()}.csv",
+                mime="text/csv"
+            )
+
+            # Visualization
+            st.subheader("📅 Daily Trends")
+            fig, ax = plt.subplots(figsize=(10, 4))
+            daily_points = df_filtered.groupby("date")["points"].sum()
+            daily_points.plot(kind="line", ax=ax, marker="o")
+            ax.set_title("Daily Points Overview")
+            ax.grid(True)
+            st.pyplot(fig)
 
 else:
     st.warning("⚠️ Please upload an Excel file to begin analysis.")
