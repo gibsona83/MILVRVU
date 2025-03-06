@@ -6,16 +6,15 @@ import plotly.express as px
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# Sidebar - MILV Logo & File Upload
-st.sidebar.image("milv.png", width=250)
-st.sidebar.title("Upload Daily RVU File")
-uploaded_file = st.sidebar.file_uploader("Upload RVU Excel File", type=["xlsx"])
-
-# Define storage path
+# Constants
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
+REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
+                    "points/half day", "procedure/half"}
 
+# ---- Helper Functions ----
+@st.cache_data(show_spinner=False)
 def load_data(file_path):
-    """Load and preprocess data from Excel file."""
+    """Load and preprocess data from Excel file with caching."""
     try:
         xls = pd.ExcelFile(file_path)
         df = xls.parse(xls.sheet_names[0])
@@ -24,53 +23,39 @@ def load_data(file_path):
         df.columns = df.columns.str.strip()
         lower_columns = df.columns.str.lower()
         
-        # Ensure required columns exist (case-insensitive check)
-        required_columns = {"date", "author", "procedure", "points", "shift", 
-                          "points/half day", "procedure/half"}
-        missing_columns = [col for col in required_columns 
-                          if col not in lower_columns.values]
-        
-        if missing_columns:
-            display_names = [col.title() for col in missing_columns]
-            st.error(f"❌ Missing required columns: {', '.join(display_names)}")
+        # Validate required columns
+        missing = [col for col in REQUIRED_COLUMNS if col not in lower_columns]
+        if missing:
+            st.error(f"❌ Missing columns: {', '.join(missing).title()}")
             return None
         
-        # Map actual column names to lowercase for processing
-        col_mapping = {col.lower(): col for col in df.columns}
+        # Map actual column names
+        col_map = {col.lower(): col for col in df.columns}
         
-        # Convert date column
-        date_col = col_mapping["date"]
+        # Process date column
+        date_col = col_map["date"]
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
         df = df.dropna(subset=[date_col])
-
-        # Convert numeric columns using actual column names
-        numeric_map = {
-            "points": col_mapping["points"],
-            "procedure": col_mapping["procedure"],
-            "shift": col_mapping["shift"],
-            "points/half day": col_mapping["points/half day"],
-            "procedure/half": col_mapping["procedure/half"]
-        }
         
-        for key, col in numeric_map.items():
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-
-        # Clean and format author names
-        author_col = col_mapping["author"]
+        # Convert numeric columns
+        numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col != "date" and col != "author"]
+        df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
+        
+        # Format author names
+        author_col = col_map["author"]
         df[author_col] = df[author_col].astype(str).str.strip().str.title()
-
+        
         return df
     except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
+        st.error(f"🚨 Error: {str(e)}")
         return None
 
-def create_sorted_bar_chart(df, metric_col, author_col, title):
-    """Create a sorted horizontal bar chart with Plotly."""
-    # Sort descending and remove invalid entries
-    sorted_df = df.sort_values(metric_col, ascending=False)
+def create_performance_chart(df, metric_col, author_col, title):
+    """Create descending sorted bar chart."""
+    df_sorted = df.sort_values(metric_col, ascending=False)
     
     fig = px.bar(
-        sorted_df,
+        df_sorted,
         x=metric_col,
         y=author_col,
         orientation='h',
@@ -87,210 +72,171 @@ def create_sorted_bar_chart(df, metric_col, author_col, title):
         yaxis_title="Provider",
         hovermode='y unified',
         coloraxis_colorbar=dict(title=metric_col)
-    )
     
     fig.update_traces(
         texttemplate='%{text:.2f}',
-        textposition='outside'
+        textposition='outside',
+        marker_line_width=1,
+        marker_line_color='black'
     )
-    
-    # Reverse order to show highest at top
     fig.update_yaxes(autorange="reversed")
-    
     return fig
 
 def create_trend_chart(df, date_col, metrics):
-    """Create a time series trend chart with enhanced visibility."""
-    # Ensure numeric data and valid dates
+    """Create enhanced time series chart."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
     
-    # Aggregate and clean data
     trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
-    
     if trend_df.empty:
         return None
     
-    # Create figure with bold lines and markers
     fig = px.line(
         trend_df,
         x='date_only',
         y=metrics,
-        title="Performance Trends Over Time",
-        labels={'date_only': 'Date', 'value': 'Metric Value'},
+        title="Performance Trends",
+        labels={'date_only': 'Date', 'value': 'Value'},
         height=400,
-        markers=True,  # Add data point markers
-        line_shape='linear',  # Straight line segments between points
-        color_discrete_sequence=['#FF4B4B', '#0068C9']  # High-contrast colors
+        markers=True,
+        line_shape='linear',
+        color_discrete_sequence=['#FF4B4B', '#0068C9']
     )
     
-    # Enhance line visibility
     fig.update_traces(
-        line_width=4,  # Thicker lines
-        marker_size=10,  # Larger markers
+        line_width=4,
+        marker_size=10,
         marker_line_width=2,
         marker_line_color='black'
     )
     
-    # Format axes
     fig.update_xaxes(
-        tickformat="%b %d",  # Month + day format
+        tickformat="%b %d",
         rangeslider_visible=True,
         gridcolor='#F0F2F6'
     )
     
-    fig.update_yaxes(
-        tickformat=".2f",
-        gridcolor='#F0F2F6'
-    )
-    
-    # Add direct labels
-    fig.update_layout(
-        hoverlabel=dict(
-            bgcolor="white",
-            font_size=16,
-            font_family="Arial"
-        ),
-        plot_bgcolor='white'
-    )
-    
+    fig.update_yaxes(tickformat=".2f", gridcolor='#F0F2F6')
+    fig.update_layout(plot_bgcolor='white')
     return fig
-# Load existing data
-if uploaded_file:
-    try:
-        with open(FILE_STORAGE_PATH, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        df = load_data(FILE_STORAGE_PATH)
-        if df is not None:
-            st.success("✅ File uploaded successfully!")
-    except Exception as e:
-        st.error(f"Upload failed: {str(e)}")
-elif os.path.exists(FILE_STORAGE_PATH):
-    df = load_data(FILE_STORAGE_PATH)
-else:
-    df = None
 
-# Main display logic
-if df is not None:
-    # Get display column names
-    display_cols = {
-        "date": [col for col in df.columns if col.lower() == "date"][0],
-        "author": [col for col in df.columns if col.lower() == "author"][0],
-        "points": [col for col in df.columns if col.lower() == "points"][0],
-        "procedure": [col for col in df.columns if col.lower() == "procedure"][0],
-        "shift": [col for col in df.columns if col.lower() == "shift"][0],
-        "points/half day": [col for col in df.columns if col.lower() == "points/half day"][0],
-        "procedure/half": [col for col in df.columns if col.lower() == "procedure/half"][0]
-    }
-
-    df = df.sort_values(display_cols["date"])
+# ---- UI Components ----
+def main():
+    # File upload
+    st.sidebar.image("milv.png", width=250)
+    uploaded_file = st.sidebar.file_uploader("Upload RVU File", type=["xlsx"])
+    
+    # Data loading
+    if uploaded_file:
+        try:
+            pd.read_excel(uploaded_file).to_excel(FILE_STORAGE_PATH, index=False)
+            st.success("✅ File uploaded!")
+        except Exception as e:
+            st.error(f"Upload failed: {str(e)}")
+    
+    df = load_data(FILE_STORAGE_PATH) if os.path.exists(FILE_STORAGE_PATH) else None
+    if not df:
+        return st.info("ℹ️ Please upload a file")
+    
+    # Get display columns
+    col_map = {col.lower(): col for col in df.columns}
+    display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
+    
+    # Date range setup
     min_date = df[display_cols["date"]].min().date()
     max_date = df[display_cols["date"]].max().date()
-
+    
     st.title("MILV Daily Productivity")
-    tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
-
+    tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
+    
     # TAB 1: Latest Day
     with tab1:
-        st.subheader(f"📅 Data for {max_date.strftime('%B %d, %Y')}")
-        df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
-
+        st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
+        df_latest = df[df[display_cols["date"] == pd.Timestamp(max_date)]
+        
         if not df_latest.empty:
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total Points", df_latest[display_cols["points"]].sum())
-            with col2:
-                st.metric("Total Procedures", df_latest[display_cols["procedure"]].sum())
-            with col3:
-                st.metric("Avg Points/Half-Day", f"{df_latest[display_cols['points/half day']].mean():.2f}")
-            with col4:
-                st.metric("Avg Procedures/Half-Day", f"{df_latest[display_cols['procedure/half']].mean():.2f}")
-
-            # Searchable Data Table
-            st.subheader("🔍 Searchable Detailed Data")
-            search_query = st.text_input("Search for a provider (Tab 1):")
-            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search_query, case=False, na=False)] if search_query else df_latest
-            st.dataframe(filtered, use_container_width=True, height=400)
-
-            # Visualizations
-            st.subheader("📊 Performance Metrics")
+            cols = st.columns(4)
+            metrics = {
+                "Total Points": display_cols["points"],
+                "Total Procedures": display_cols["procedure"],
+                "Points/Half-Day": display_cols["points/half day"],
+                "Procedures/Half-Day": display_cols["procedure/half"]
+            }
+            for (title, col), c in zip(metrics.items(), cols):
+                value = df_latest[col].sum() if "Total" in title else df_latest[col].mean()
+                c.metric(title, f"{value:,.2f}" if isinstance(value, float) else f"{value:,}")
+            
+            st.subheader("🔍 Detailed Data")
+            search = st.text_input("Search providers:")
+            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
+            st.dataframe(filtered, use_container_width=True)
+            
+            st.subheader("📊 Performance")
             col1, col2 = st.columns(2)
             with col1:
-                fig = create_sorted_bar_chart(filtered, 
-                                           display_cols["points/half day"],
-                                           display_cols["author"],
-                                           "Points per Half-Day (Descending Order)")
+                fig = create_performance_chart(filtered, display_cols["points/half day"], 
+                                             display_cols["author"], "Points per Half-Day")
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
-                fig = create_sorted_bar_chart(filtered, 
-                                           display_cols["procedure/half"],
-                                           display_cols["author"],
-                                           "Procedures per Half-Day (Descending Order)")
+                fig = create_performance_chart(filtered, display_cols["procedure/half"], 
+                                             display_cols["author"], "Procedures per Half-Day")
                 st.plotly_chart(fig, use_container_width=True)
-
-    # Inside Tab 2 code
-with tab2:
-    st.subheader("📊 Date Range Analysis")
     
-    # Create session state to persist date selection
-    if 'date_range' not in st.session_state:
-        st.session_state.date_range = [max_date, max_date]
-
-    # Enhanced date input with validation
-    date_selection = st.date_input(
-        "Select Date Range (Start - End)",
-        value=tuple(st.session_state.date_range),
-        min_value=min_date,
-        max_value=max_date,
-        key="date_range_selector",
-        help="Click calendar icon or type dates in YYYY-MM-DD format",
-        on_change=lambda: st.session_state.update({"data_loaded": False})
-    )
-
-    # Handle date input validation
-    if len(date_selection) == 2:
-        start_date, end_date = date_selection
-        if start_date > end_date:
+    # TAB 2: Trend Analysis
+    with tab2:
+        st.subheader("Date Range Analysis")
+        
+        # Date input with session state
+        if 'date_range' not in st.session_state:
+            st.session_state.date_range = [max_date - pd.DateOffset(days=7), max_date]
+        
+        dates = st.date_input(
+            "Select Range (Start - End)",
+            value=st.session_state.date_range,
+            min_value=min_date,
+            max_value=max_date,
+            help="Type dates (YYYY-MM-DD) or use calendar"
+        )
+        
+        # Handle date validation
+        if len(dates) != 2:
+            st.info("ℹ️ Select start and end dates")
+            st.stop()
+        if dates[0] > dates[1]:
             st.error("❌ End date must be after start date")
             st.stop()
-            
-        df_range = df[(df[display_cols["date"] >= pd.Timestamp(start_date)) & 
-                     (df[display_cols["date"] <= pd.Timestamp(end_date))]
         
-        if not df_range.empty:
-            # ... [rest of your existing tab2 code] ...
-            
-        else:
+        st.session_state.date_range = dates
+        start, end = dates
+        df_range = df[df[display_cols["date"].between(pd.Timestamp(start), pd.Timestamp(end))]
+        
+        if df_range.empty:
             st.warning("⚠️ No data in selected range")
-    elif len(date_selection) == 1:
-        st.info("ℹ️ Please select both start and end dates")
-        st.stop()
-    else:
-        st.warning("⚠️ Please select a valid date range")
-        st.stop()
+            st.stop()
+        
+        cols = st.columns(4)
+        metrics = {
+            "Points Total": display_cols["points"],
+            "Procedures Total": display_cols["procedure"],
+            "Avg Points/HD": display_cols["points/half day"],
+            "Avg Procedures/HD": display_cols["procedure/half"]
+        }
+        for (title, col), c in zip(metrics.items(), cols):
+            value = df_range[col].sum() if "Total" in title else df_range[col].mean()
+            c.metric(title, f"{value:,.2f}")
+        
+        st.subheader("📈 Trends")
+        trend_fig = create_trend_chart(df_range, display_cols["date"], 
+                                      [display_cols["points/half day"], display_cols["procedure/half"]])
+        if trend_fig:
+            st.plotly_chart(trend_fig, use_container_width=True)
+        else:
+            st.warning("No trend data available")
+        
+        st.subheader("🔍 Filtered Data")
+        search = st.text_input("Search providers (Trends):")
+        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
+        st.dataframe(filtered_range, use_container_width=True)
 
-                st.subheader("📊 Performance Analysis")
-                col1, col2 = st.columns(2)
-                with col1:
-                    fig = create_sorted_bar_chart(filtered_range, 
-                                                display_cols["points/half day"],
-                                                display_cols["author"],
-                                                "Points per Half-Day Timeline")
-                    st.plotly_chart(fig, use_container_width=True)
-                with col2:
-                    fig = create_sorted_bar_chart(filtered_range, 
-                                                display_cols["procedure/half"],
-                                                display_cols["author"],
-                                                "Procedures per Half-Day Timeline")
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                st.subheader("📈 Trend Analysis")
-trend_fig = create_trend_chart(
-    df_range,
-    display_cols["date"],
-    [display_cols["points/half day"], display_cols["procedure/half"]]
-)
-if trend_fig:
-    st.plotly_chart(trend_fig, use_container_width=True)
-else:
-    st.warning("No trend data available for selected period")
+if __name__ == "__main__":
+    main()
