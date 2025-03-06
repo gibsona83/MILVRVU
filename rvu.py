@@ -6,8 +6,9 @@ import matplotlib.pyplot as plt
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
-# Sidebar - File Upload
-st.sidebar.title("Upload File")
+# Sidebar - MILV Logo & File Upload
+st.sidebar.image("milv.png", width=250)
+st.sidebar.title("Upload Daily RVU File")
 uploaded_file = st.sidebar.file_uploader("Upload RVU Excel File", type=["xlsx"])
 
 # Define storage path
@@ -94,6 +95,9 @@ if df is not None:
     min_date = df["date"].min().date()
     max_date = df["date"].max().date()
     formatted_max_date = pd.to_datetime(max_date).strftime("%B %d, %Y")  # Format: "March 5, 2025"
+
+    # Title
+    st.title("MILV Daily Productivity")
 
     # Create Tabs
     tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
