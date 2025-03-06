@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Page Configuration
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
@@ -63,9 +64,9 @@ else:
     df = None
 
 # Function to improve visualization
-def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
-    """Generates a sorted bar chart with improved readability."""
-    
+def plot_bar_chart(df, x_col, y_col, title, ylabel):
+    """Generates a sorted horizontal bar chart with improved readability."""
+
     # Ensure numeric conversion and drop NaNs
     df[y_col] = pd.to_numeric(df[y_col], errors="coerce")
     df_sorted = df.dropna(subset=[y_col]).sort_values(by=y_col, ascending=False)  # Sorted DESCENDING
@@ -75,26 +76,28 @@ def plot_bar_chart(df, x_col, y_col, title, ylabel, horizontal=False):
         st.warning(f"⚠️ No valid data available for {title}.")
         return
 
-    fig, ax = plt.subplots(figsize=(12, 6))  # Adjusted size for better readability
+    # Set figure size dynamically based on number of providers
+    fig_height = min(max(len(df_sorted) * 0.2, 5), 15)  # Adjust height dynamically
+    fig, ax = plt.subplots(figsize=(12, fig_height))
 
-    if horizontal:
-        ax.barh(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
-        ax.set_xlabel(ylabel, fontsize=12)
-        ax.set_ylabel("Providers", fontsize=12)
-    else:
-        ax.bar(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
-        ax.set_ylabel(ylabel, fontsize=12)
-    
+    # Bar chart
+    y_labels = df_sorted[x_col].values
+    ax.barh(y_labels, df_sorted[y_col], color='steelblue', edgecolor='black')
+
     # Aesthetics
+    ax.set_xlabel(ylabel, fontsize=12)
+    ax.set_ylabel("Providers", fontsize=12)
     ax.set_title(title, fontsize=14, fontweight="bold")
 
-    if len(df_sorted[x_col]) > 15:
-        if horizontal:
-            ax.set_yticklabels(df_sorted[x_col], fontsize=10)
-        else:
-            ax.set_xticklabels(df_sorted[x_col], rotation=30, ha="right", fontsize=10)  # Reduced rotation for better readability
-    
-    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    # Show fewer labels to avoid overlap
+    if len(y_labels) > 20:
+        step = max(len(y_labels) // 10, 1)  # Show every Nth label
+        ax.set_yticks(ax.get_yticks()[::step])
+        ax.set_yticklabels(y_labels[::step], fontsize=10)
+    else:
+        ax.set_yticklabels(y_labels, fontsize=10)
+
+    ax.grid(axis='x', linestyle='--', alpha=0.7)
 
     # Show plot
     st.pyplot(fig)
@@ -135,8 +138,8 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_latest, "last_name", "points", "Points per Provider (Descending)", "Points", horizontal=True)
-            plot_bar_chart(df_latest, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
+            plot_bar_chart(df_latest, "last_name", "points", "Points per Provider (Descending)", "Points")
+            plot_bar_chart(df_latest, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures")
 
     # **TAB 2: Date Range Analysis**
     with tab2:
@@ -204,5 +207,5 @@ if df is not None:
             # **Visualizations**
             st.subheader("📊 Data Visualizations")
 
-            plot_bar_chart(df_filtered, "last_name", "points", "Points per Provider (Descending)", "Points", horizontal=True)
-            plot_bar_chart(df_filtered, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures", horizontal=True)
+            plot_bar_chart(df_filtered, "last_name", "points", "Points per Provider (Descending)", "Points")
+            plot_bar_chart(df_filtered, "last_name", "procedure", "Procedures per Provider (Descending)", "Procedures")
