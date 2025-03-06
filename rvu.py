@@ -81,11 +81,11 @@ def create_performance_chart(df, metric_col, author_col, title):
     return fig
 
 def create_trend_chart(df, date_col, author_col, metrics):
-    """Create a time series trend chart without duplication."""
+    """Create a time series trend chart with correct aggregation, avoiding duplicates."""
     df = df.copy()
     df['date_only'] = df[date_col].dt.date
 
-    # Aggregate data per date and provider (avoid duplication)
+    # Aggregate data per date and provider (ensures no duplicate stacking)
     trend_df = df.groupby(['date_only', author_col])[metrics].sum().reset_index().dropna()
 
     if trend_df.empty:
