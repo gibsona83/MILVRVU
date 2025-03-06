@@ -24,7 +24,7 @@ def load_data(file_path):
         df.columns = df.columns.str.strip().str.lower()
         
         # Ensure required columns exist
-        required_columns = {"date", "author", "points", "procedure"}
+        required_columns = {"date", "author", "points", "procedure", "shift"}
         missing_columns = required_columns - set(df.columns)
 
         if missing_columns:
@@ -39,8 +39,12 @@ def load_data(file_path):
         df["last_name"] = df["author"].str.split(",").str[0]
 
         # Convert numeric columns
-        for col in ["points", "procedure"]:
+        for col in ["points", "procedure", "shift"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")  # Convert non-numeric values to NaN
+
+        # Compute Points/Half-Day & Procedures/Half-Day
+        df["points_half_day"] = df["points"] / df["shift"]
+        df["procedures_half_day"] = df["procedure"] / df["shift"]
 
         return df
     except Exception as e:
@@ -62,24 +66,67 @@ elif os.path.exists(FILE_STORAGE_PATH):
 else:
     df = None
 
+# Function to plot bar charts
+def plot_bar_chart(df, x_col, y_col, title, ylabel):
+    """Generates a horizontal bar chart for better readability."""
+
+    df_sorted = df.sort_values(by=y_col, ascending=False)
+
+    if df_sorted.empty:
+        st.warning(f"⚠️ No valid data available for {title}.")
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.barh(df_sorted[x_col], df_sorted[y_col], color='steelblue', edgecolor='black')
+
+    ax.set_xlabel(ylabel, fontsize=12)
+    ax.set_ylabel("Providers", fontsize=12)
+    ax.set_title(title, fontsize=14, fontweight="bold")
+
+    plt.tight_layout()
+    st.pyplot(fig)
+
 # Ensure data is available
 if df is not None:
-    # Sort by date and get min/max dates
     df = df.sort_values("date")
     min_date = df["date"].min().date()
     max_date = df["date"].max().date()
 
-    # Title
     st.title("MILV Daily Productivity")
 
-    # Create Tabs
     tab1, tab2 = st.tabs(["📅 Latest Day", "📊 Date Range Analysis"])
+
+    # **TAB 1: Latest Day**
+    with tab1:
+        st.subheader(f"📅 Data for {max_date.strftime('%B %d, %Y')}")
+        
+        df_latest = df[df["date"] == pd.Timestamp(max_date)]
+
+        if df_latest.empty:
+            st.warning("⚠️ No data available for the latest date.")
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Points", df_latest["points"].sum())
+            with col2:
+                st.metric("Total Procedures", df_latest["procedure"].sum())
+            with col3:
+                st.metric("Avg Points/Half-Day", f"{df_latest['points_half_day'].mean():.2f}")
+            with col4:
+                st.metric("Avg Procedures/Half-Day", f"{df_latest['procedures_half_day'].mean():.2f}")
+
+            st.subheader("🔍 Detailed Data")
+            st.dataframe(df_latest, use_container_width=True, height=400)
+
+            st.subheader("📊 Data Visualizations")
+
+            plot_bar_chart(df_latest, "last_name", "points_half_day", "Points per Half-Day (Descending)", "Points per Half-Day")
+            plot_bar_chart(df_latest, "last_name", "procedures_half_day", "Procedures per Half-Day (Descending)", "Procedures per Half-Day")
 
     # **TAB 2: Date Range Analysis**
     with tab2:
         st.subheader("📊 Select Date Range for Analysis")
 
-        # Date Input - Forces two selections
         date_selection = st.date_input(
             "Select Date Range",
             value=(max_date, max_date),
@@ -88,21 +135,18 @@ if df is not None:
             key="date_selector"
         )
 
-        # **Force users to select a valid date range**
         if isinstance(date_selection, tuple) and len(date_selection) == 2:
             start_date, end_date = map(pd.to_datetime, date_selection)
         elif isinstance(date_selection, pd.Timestamp):
-            start_date = end_date = pd.to_datetime(date_selection)  # Ensures both start and end exist
+            start_date = end_date = pd.to_datetime(date_selection)
         else:
             st.error("⚠️ Please select a valid date range before proceeding.")
-            st.stop()  # Prevents execution if no valid date range is selected
+            st.stop()
 
-        # **Validate date order**
         if start_date > end_date:
             st.error("❌ End date must be after or the same as the start date.")
             st.stop()
 
-        # Provider selection
         providers = df["author"].unique().tolist()
         selected_providers = st.multiselect(
             "Select Providers",
@@ -114,7 +158,6 @@ if df is not None:
         if "ALL" in selected_providers:
             selected_providers = providers
 
-        # Filter data
         mask = (
             (df["date"] >= start_date) & 
             (df["date"] <= end_date) & 
@@ -127,13 +170,17 @@ if df is not None:
         if df_filtered.empty:
             st.warning("⚠️ No data available for the selected filters.")
         else:
-            # Metrics
-            col1, col2 = st.columns(2)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total Points", df_filtered["points"].sum())
             with col2:
                 st.metric("Total Procedures", df_filtered["procedure"].sum())
+            with col3:
+                st.metric("Avg Points/Half-Day", f"{df_filtered['points_half_day'].mean():.2f}")
+            with col4:
+                st.metric("Avg Procedures/Half-Day", f"{df_filtered['procedures_half_day'].mean():.2f}")
 
-            # Data Table
-            st.subheader("🔍 Detailed Data")
-            st.dataframe(df_filtered, use_container_width=True, height=400)
+            st.subheader("📊 Data Visualizations")
+
+            plot_bar_chart(df_filtered, "last_name", "points_half_day", "Points per Half-Day (Descending)", "Points per Half-Day")
+            plot_bar_chart(df_filtered, "last_name", "procedures_half_day", "Procedures per Half-Day (Descending)", "Procedures per Half-Day")
