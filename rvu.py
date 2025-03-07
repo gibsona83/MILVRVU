@@ -142,12 +142,14 @@ def main():
                                  ("Avg Points/HD", "Avg Points per Half-Day per Provider"),
                                  ("Total Procedures", "Total Procedures per Provider"),
                                  ("Avg Procedures/HD", "Avg Procedures per Half-Day per Provider")]:
-            st.plotly_chart(px.bar(provider_summary.sort_values(col_name, ascending=True),
-                                   x=col_name, y="Author", orientation='h',
-                                   text=col_name, color=col_name,
-                                   color_continuous_scale='Viridis',
-                                   title=title),
-                            use_container_width=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.plotly_chart(px.bar(provider_summary.sort_values(col_name, ascending=True),
+                                       x=col_name, y="Author", orientation='h',
+                                       text=col_name, color=col_name,
+                                       color_continuous_scale='Viridis',
+                                       title=title),
+                                use_container_width=True)
         
         st.subheader("🔍 Detailed Data")
         search_trend = st.text_input("Search providers (Trends):")
