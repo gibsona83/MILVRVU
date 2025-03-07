@@ -51,35 +51,6 @@ def load_data(file_path):
         st.error(f"🚨 Error: {str(e)}")
         return None
 
-def create_trend_chart(df, date_col, metrics):
-    """Create improved time series area chart."""
-    df['date_only'] = df[date_col].dt.date
-    
-    trend_df = df.groupby('date_only')[metrics].mean().reset_index().dropna()
-    if trend_df.empty:
-        return None
-    
-    fig = go.Figure()
-    for metric in metrics:
-        fig.add_trace(go.Scatter(
-            x=trend_df['date_only'], 
-            y=trend_df[metric], 
-            mode='lines+markers', 
-            fill='tozeroy',
-            name=metric
-        ))
-    
-    fig.update_layout(
-        title="Performance Trends",
-        xaxis_title="Date",
-        yaxis_title="Value",
-        height=400,
-        plot_bgcolor='white',
-        xaxis=dict(tickformat="%b %d", rangeslider_visible=True),
-        yaxis=dict(tickformat=".2f")
-    )
-    return fig
-
 # ---- Main Application ----
 def main():
     st.sidebar.image("milv.png", width=250)
@@ -102,6 +73,33 @@ def main():
     min_date, max_date = df[display_cols["date"]].min().date(), df[display_cols["date"]].max().date()
     st.title("MILV Daily Productivity")
     tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
+    
+    with tab1:
+        st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
+        df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
+        
+        if not df_latest.empty:
+            st.subheader("🔍 Detailed Data")
+            search = st.text_input("Search providers:")
+            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
+            st.dataframe(filtered, use_container_width=True)
+            
+            st.subheader("📊 Performance")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.plotly_chart(px.bar(filtered, x=display_cols["points/half day"], 
+                                       y=display_cols["author"], orientation='h', 
+                                       text=display_cols["points/half day"], 
+                                       color=display_cols["points/half day"],
+                                       color_continuous_scale='Viridis',
+                                       title="Points per Half-Day"), use_container_width=True)
+            with col2:
+                st.plotly_chart(px.bar(filtered, x=display_cols["procedure/half"], 
+                                       y=display_cols["author"], orientation='h', 
+                                       text=display_cols["procedure/half"], 
+                                       color=display_cols["procedure/half"],
+                                       color_continuous_scale='Viridis',
+                                       title="Procedures per Half-Day"), use_container_width=True)
     
     with tab2:
         st.subheader("Date Range Analysis")
@@ -126,12 +124,12 @@ def main():
         st.dataframe(filtered_range, use_container_width=True)
         
         st.subheader("📈 Trends")
-        trend_fig = create_trend_chart(filtered_range, display_cols["date"], 
-                                      [display_cols["points/half day"], display_cols["procedure/half"]])
-        if trend_fig:
-            st.plotly_chart(trend_fig, use_container_width=True)
-        else:
-            st.warning("No trend data available")
+        fig = px.area(filtered_range, x=display_cols["date"], 
+                      y=[display_cols["points/half day"], display_cols["procedure/half"]],
+                      title="Performance Trends", 
+                      labels={display_cols["date"]: "Date", "value": "Value"},
+                      height=400, markers=True)
+        st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
