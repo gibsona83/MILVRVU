@@ -131,6 +131,24 @@ def main():
         fig.update_layout(legend_title_text="Metrics")
         st.plotly_chart(fig, use_container_width=True)
         
+        st.subheader("📊 Provider Performance")
+        provider_summary = df_range.groupby(display_cols["author"]).agg({
+            display_cols["points/half day"]: ['sum', 'mean'],
+            display_cols["procedure/half"]: ['sum', 'mean']
+        }).reset_index()
+        provider_summary.columns = ['Author', 'Total Points', 'Avg Points/HD', 'Total Procedures', 'Avg Procedures/HD']
+        
+        for col_name, title in [("Total Points", "Total Points per Provider"),
+                                 ("Avg Points/HD", "Avg Points per Half-Day per Provider"),
+                                 ("Total Procedures", "Total Procedures per Provider"),
+                                 ("Avg Procedures/HD", "Avg Procedures per Half-Day per Provider")]:
+            st.plotly_chart(px.bar(provider_summary.sort_values(col_name, ascending=True),
+                                   x=col_name, y="Author", orientation='h',
+                                   text=col_name, color=col_name,
+                                   color_continuous_scale='Viridis',
+                                   title=title),
+                            use_container_width=True)
+        
         st.subheader("🔍 Detailed Data")
         search_trend = st.text_input("Search providers (Trends):")
         filtered_range = df_range[df_range[display_cols["author"]].str.contains(search_trend, case=False)] if search_trend else df_range
