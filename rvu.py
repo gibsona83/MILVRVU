@@ -74,6 +74,37 @@ def main():
     st.title("MILV Daily Productivity")
     tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
     
+    with tab1:
+        st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
+        df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
+        
+        if not df_latest.empty:
+            st.subheader("📊 Performance")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["points/half day"], ascending=False),
+                                       x=display_cols["points/half day"],
+                                       y=display_cols["author"], orientation='h',
+                                       text=display_cols["points/half day"],
+                                       color=display_cols["points/half day"],
+                                       color_continuous_scale='Viridis',
+                                       title="Points per Half-Day"),
+                                use_container_width=True)
+            with col2:
+                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["procedure/half"], ascending=False),
+                                       x=display_cols["procedure/half"],
+                                       y=display_cols["author"], orientation='h',
+                                       text=display_cols["procedure/half"],
+                                       color=display_cols["procedure/half"],
+                                       color_continuous_scale='Viridis',
+                                       title="Procedures per Half-Day"),
+                                use_container_width=True)
+            
+            st.subheader("🔍 Detailed Data")
+            search = st.text_input("Search providers:")
+            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
+            st.dataframe(filtered, use_container_width=True)
+    
     with tab2:
         st.subheader("Date Range Analysis")
         
@@ -121,27 +152,6 @@ def main():
                                    color_continuous_scale='Viridis',
                                    title="Avg Points per Half-Day per Provider"),
                             use_container_width=True)
-        
-        col3, col4 = st.columns(2)
-        with col3:
-            st.plotly_chart(px.bar(provider_summary.sort_values("Total Procedures", ascending=True),
-                                   x="Total Procedures", y="Author", orientation='h',
-                                   text="Total Procedures", color="Total Procedures",
-                                   color_continuous_scale='Viridis',
-                                   title="Total Procedures per Provider"),
-                            use_container_width=True)
-        with col4:
-            st.plotly_chart(px.bar(provider_summary.sort_values("Avg Procedures/HD", ascending=True),
-                                   x="Avg Procedures/HD", y="Author", orientation='h',
-                                   text="Avg Procedures/HD", color="Avg Procedures/HD",
-                                   color_continuous_scale='Viridis',
-                                   title="Avg Procedures per Half-Day per Provider"),
-                            use_container_width=True)
-        
-        st.subheader("🔍 Detailed Data")
-        search = st.text_input("Search providers (Trends):")
-        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
-        st.dataframe(filtered_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
