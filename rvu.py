@@ -82,7 +82,7 @@ def main():
             st.subheader("📊 Performance")
             col1, col2 = st.columns(2)
             with col1:
-                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["points/half day"], ascending=False),
+                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["points/half day"], ascending=True),
                                        x=display_cols["points/half day"],
                                        y=display_cols["author"], orientation='h',
                                        text=display_cols["points/half day"],
@@ -91,7 +91,7 @@ def main():
                                        title="Points per Half-Day"),
                                 use_container_width=True)
             with col2:
-                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["procedure/half"], ascending=False),
+                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["procedure/half"], ascending=True),
                                        x=display_cols["procedure/half"],
                                        y=display_cols["author"], orientation='h',
                                        text=display_cols["procedure/half"],
