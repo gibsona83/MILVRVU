@@ -49,9 +49,7 @@ def load_data(uploaded_file):
         df[NUMERIC_COLS] = df[NUMERIC_COLS].apply(pd.to_numeric, errors='coerce').fillna(0)
 
         # Convert turnaround time
-        df['turnaround'] = pd.to_timedelta(
-            df['turnaround'].astype(str), errors="coerce"
-        ).dt.total_seconds() / 60
+        df['turnaround'] = pd.to_timedelta(df['turnaround'].astype(str), errors="coerce").dt.total_seconds() / 60
 
         # Clean string columns
         df['author'] = df['author'].astype(str).str.strip().str.title()
@@ -120,6 +118,16 @@ def main():
     st.title("📈 MILV Productivity Dashboard")
     tab1, tab2, tab3 = st.tabs(["📅 Daily Performance", "📈 Trend Analysis", "🔍 Deep Insights"])
 
+    # ---- Daily Performance ----
+    with tab1:
+        st.subheader(f"🗓️ {max_date.strftime(DATE_FORMAT)}")
+        df_daily = df[df['date'].dt.date == max_date].copy()
+
+        if df_daily.empty:
+            st.warning("⚠️ No data available for latest date")
+
+        st.dataframe(df_daily, use_container_width=True)  # ✅ Ensure tab always loads
+
     # ---- Trend Analysis ----
     with tab2:
         st.subheader("📈 Date Range Analysis")
@@ -138,42 +146,25 @@ def main():
         df_range = df[df['date'].between(pd.Timestamp(dates[0]), pd.Timestamp(dates[1]))].copy()
         
         if df_range.empty:
-            return st.warning("⚠️ No data in selected range")
+            st.warning("⚠️ No data in selected range")
 
-        # Enhanced visualizations
-        col1, col2 = st.columns(2)
-        with col1:
-            try:
-                df_daily = df_range.set_index('date')[NUMERIC_COLS].resample('D').mean().reset_index()
-                st.plotly_chart(create_combined_chart(
-                    df_daily,
-                    'date',
-                    ['points/half day', 'procedure/half'],
-                    "📈 Daily Performance Trends"
-                ), use_container_width=True)
-            except Exception as e:
-                st.error(f"Error rendering daily trends: {str(e)}")
+        st.plotly_chart(create_combined_chart(df_range, "date", ["points/half day", "procedure/half"], "📈 Daily Performance Trends"), use_container_width=True)
 
-        with col2:
-            try:
-                valid_data = df_range.dropna(subset=['points/half day', 'procedure/half', 'turnaround'])
-                fig = px.scatter(
-                    valid_data,
-                    x='points/half day',
-                    y='procedure/half',
-                    color='author',
-                    size='turnaround',
-                    title="📊 Productivity Correlation Analysis",
-                    height=400,
-                    hover_data=['date', 'shift'],
-                    size_max=15
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error rendering correlation analysis: {str(e)}")
+        valid_data = df_range.dropna(subset=["points/half day", "procedure/half", "turnaround"])
+        if not valid_data.empty:  # ✅ Fix: Ensure scatter plot has data
+            st.plotly_chart(px.scatter(valid_data, x="points/half day", y="procedure/half", color="author", size="turnaround", title="📊 Productivity Correlation Analysis", height=400, size_max=15), use_container_width=True)
 
-        with st.expander("📋 View Detailed Data"):
-            st.dataframe(df_range, use_container_width=True)
+    # ---- Deep Insights ----
+    with tab3:
+        st.subheader("🔍 Advanced Analytics")
+
+        if not df.empty:  # ✅ Fix: Ensure Deep Insights tab loads
+            st.plotly_chart(px.histogram(df, x="day_of_week", color="shift", barmode="group", title="📅 Weekly Shift Distribution", height=400), use_container_width=True)
+            st.plotly_chart(px.density_heatmap(df, x="date", y="author", z="points/half day", title="🔥 Productivity Heatmap", height=400), use_container_width=True)
+
+            scatter_matrix_data = df.dropna(subset=["points/half day", "procedure/half", "turnaround"])
+            if not scatter_matrix_data.empty:
+                st.plotly_chart(px.scatter_matrix(scatter_matrix_data, dimensions=["points/half day", "procedure/half", "turnaround"], color="shift", title="📌 Multi-Dimensional Analysis", height=600), use_container_width=True)
 
 if __name__ == "__main__":
     main()
