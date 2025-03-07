@@ -1,24 +1,22 @@
 import streamlit as st
 import pandas as pd
-import os
 import plotly.express as px
 
 # ---- Page Configuration ----
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # ---- Constants ----
-FILE_STORAGE_PATH = "latest_rvu.xlsx"
 REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
                     "points/half day", "procedure/half"}
 COLOR_SCALE = "Viridis"
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
-def load_data(file_path):
-    """Load and preprocess data from an Excel file."""
+def load_data(uploaded_file):
+    """Load and preprocess data from an uploaded Excel file."""
     try:
         uploaded_file.seek(0)  # Reset file pointer for re-reads
-        xls = pd.ExcelFile(file_path)
+        xls = pd.ExcelFile(uploaded_file)
         df = xls.parse(xls.sheet_names[0])
 
         # Clean column names (case-insensitive)
@@ -54,21 +52,17 @@ def load_data(file_path):
 
 # ---- Main Application ----
 def main():
-    # Sidebar (mobile-friendly adjustments)
-    with st.sidebar:
-        st.image("milv.png", width=200)
-        uploaded_file = st.file_uploader("📤 Upload RVU File", type=["xlsx"])
+    st.sidebar.image("milv.png", width=200)
+    uploaded_file = st.sidebar.file_uploader("📤 Upload RVU File", type=["xlsx"])
 
-    if uploaded_file:
-        try:
-            pd.read_excel(uploaded_file).to_excel(FILE_STORAGE_PATH, index=False)
-            st.success("✅ File uploaded successfully!")
-        except Exception as e:
-            st.error(f"❌ Upload failed: {str(e)}")
+    if not uploaded_file:
+        return st.info("ℹ️ Please upload a file to begin analysis")
 
-    df = load_data(FILE_STORAGE_PATH) if os.path.exists(FILE_STORAGE_PATH) else None
+    with st.spinner("📊 Processing data..."):
+        df = load_data(uploaded_file)
+
     if df is None:
-        return st.info("ℹ️ Please upload a file")
+        return
 
     col_map = {col.lower(): col for col in df.columns}
     display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
@@ -84,7 +78,6 @@ def main():
         df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
 
         if not df_latest.empty:
-            # Multi-select searchable dropdown for filtering
             selected_providers = st.multiselect(
                 "🔍 Select providers:",
                 options=df_latest[display_cols["author"]].unique(),
@@ -93,11 +86,9 @@ def main():
                 format_func=lambda x: f"👤 {x}",
             )
 
-            # Apply filtering
             filtered_latest = df_latest[df_latest[display_cols["author"]].isin(selected_providers)] if selected_providers else df_latest
 
-            # Bar charts sorted high to low
-            col1, col2 = st.columns(1 if st.session_state.get("mobile") else 2)
+            col1, col2 = st.columns(2)
             with col1:
                 st.plotly_chart(
                     px.bar(
@@ -151,7 +142,6 @@ def main():
             st.warning("⚠️ No data available for the selected range")
             return
 
-        # Multi-select searchable dropdown for filtering
         selected_providers_trend = st.multiselect(
             "🔍 Select providers:",
             options=df_range[display_cols["author"]].unique(),
@@ -160,7 +150,6 @@ def main():
             format_func=lambda x: f"👤 {x}",
         )
 
-        # Apply filtering
         df_filtered_trend = df_range[df_range[display_cols["author"]].isin(selected_providers_trend)] if selected_providers_trend else df_range
 
         st.subheader("📊 Provider Performance Over Time")
