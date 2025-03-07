@@ -74,37 +74,6 @@ def main():
     st.title("MILV Daily Productivity")
     tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
     
-    with tab1:
-        st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
-        df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
-        
-        if not df_latest.empty:
-            st.subheader("📊 Performance")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["points/half day"], ascending=False),
-                                       x=display_cols["points/half day"],
-                                       y=display_cols["author"], orientation='h',
-                                       text=display_cols["points/half day"],
-                                       color=display_cols["points/half day"],
-                                       color_continuous_scale='Viridis',
-                                       title="Points per Half-Day"),
-                                use_container_width=True)
-            with col2:
-                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["procedure/half"], ascending=False),
-                                       x=display_cols["procedure/half"],
-                                       y=display_cols["author"], orientation='h',
-                                       text=display_cols["procedure/half"],
-                                       color=display_cols["procedure/half"],
-                                       color_continuous_scale='Viridis',
-                                       title="Procedures per Half-Day"),
-                                use_container_width=True)
-            
-            st.subheader("🔍 Detailed Data")
-            search = st.text_input("Search providers:")
-            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
-            st.dataframe(filtered, use_container_width=True)
-    
     with tab2:
         st.subheader("Date Range Analysis")
         
@@ -131,12 +100,27 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
         
         st.subheader("📊 Provider Performance")
-        provider_fig = px.bar(df_range.groupby(display_cols["author"])[display_cols["points/half day"]].sum().reset_index().sort_values(display_cols["points/half day"], ascending=False),
-                              x=display_cols["points/half day"], y=display_cols["author"], orientation='h',
-                              text=display_cols["points/half day"], color=display_cols["points/half day"],
-                              color_continuous_scale='Viridis',
-                              title="Total Points per Provider")
-        st.plotly_chart(provider_fig, use_container_width=True)
+        provider_summary = df_range.groupby(display_cols["author"]).agg({
+            display_cols["points/half day"]: ['sum', 'mean'],
+            display_cols["procedure/half"]: ['sum', 'mean']
+        }).reset_index()
+        provider_summary.columns = ['Author', 'Total Points', 'Avg Points/HD', 'Total Procedures', 'Avg Procedures/HD']
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(px.bar(provider_summary.sort_values("Total Points", ascending=True),
+                                   x="Total Points", y="Author", orientation='h',
+                                   text="Total Points", color="Total Points",
+                                   color_continuous_scale='Viridis',
+                                   title="Total Points per Provider"),
+                            use_container_width=True)
+        with col2:
+            st.plotly_chart(px.bar(provider_summary.sort_values("Avg Points/HD", ascending=True),
+                                   x="Avg Points/HD", y="Author", orientation='h',
+                                   text="Avg Points/HD", color="Avg Points/HD",
+                                   color_continuous_scale='Viridis',
+                                   title="Avg Points per Half-Day per Provider"),
+                            use_container_width=True)
         
         st.subheader("🔍 Detailed Data")
         search = st.text_input("Search providers (Trends):")
