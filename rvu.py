@@ -53,8 +53,9 @@ def load_data(uploaded_file):
             df['turnaround'].astype(str), errors="coerce"
         ).dt.total_seconds() / 60
 
-        # Format author names
+        # Clean string columns
         df['author'] = df['author'].astype(str).str.strip().str.title()
+        df['shift'] = df['shift'].astype(str).str.strip().str.title()
 
         # Add derived metrics
         df['week_number'] = df['date'].dt.isocalendar().week
@@ -76,7 +77,7 @@ def create_combined_chart(df, x_col, y_cols, title):
             mode='lines+markers',
             name=col.title(),
             line=dict(width=2)
-        ))
+        )
     fig.update_layout(
         title=title,
         xaxis_title=x_col.title(),
@@ -203,46 +204,61 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             # Daily performance trends
-            df_daily = df_range.set_index('date')[NUMERIC_COLS].resample('D').mean().reset_index()
-            st.plotly_chart(create_combined_chart(
-                df_daily,
-                'date',
-                ['points/half day', 'procedure/half'],
-                "📈 Daily Performance Trends"
-            ), use_container_width=True)
+            try:
+                df_daily = df_range.set_index('date')[NUMERIC_COLS].resample('D').mean().reset_index()
+                st.plotly_chart(create_combined_chart(
+                    df_daily,
+                    'date',
+                    ['points/half day', 'procedure/half'],
+                    "📈 Daily Performance Trends"
+                ), use_container_width=True)
+            except Exception as e:
+                st.error(f"Error rendering daily trends: {str(e)}")
 
         with col2:
-            st.plotly_chart(px.scatter(
-                df_range,
-                x='points/half day',
-                y='procedure/half',
-                color='author',
-                size='turnaround',
-                title="📊 Productivity Correlation Analysis",
-                height=400,
-                hover_data=['date', 'shift']
-            ), use_container_width=True)
+            try:
+                valid_data = df_range.dropna(subset=['points/half day', 'procedure/half', 'turnaround'])
+                fig = px.scatter(
+                    valid_data,
+                    x='points/half day',
+                    y='procedure/half',
+                    color='author',
+                    size='turnaround',
+                    title="📊 Productivity Correlation Analysis",
+                    height=400,
+                    hover_data=['date', 'shift'],
+                    size_max=15
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error rendering correlation analysis: {str(e)}")
 
         col3, col4 = st.columns(2)
         with col3:
-            # Weekly turnaround trends
-            df_weekly = df_range.set_index('date')[['turnaround']].resample('W').mean().reset_index()
-            st.plotly_chart(create_combined_chart(
-                df_weekly,
-                'date',
-                ['turnaround'],
-                "⏳ Weekly Turnaround Trends"
-            ), use_container_width=True)
+            try:
+                df_weekly = df_range.set_index('date')[['turnaround']].resample('W').mean().reset_index()
+                st.plotly_chart(create_combined_chart(
+                    df_weekly,
+                    'date',
+                    ['turnaround'],
+                    "⏳ Weekly Turnaround Trends"
+                ), use_container_width=True)
+            except Exception as e:
+                st.error(f"Error rendering weekly trends: {str(e)}")
 
         with col4:
-            st.plotly_chart(px.box(
-                df_range,
-                x='shift',
-                y='points/half day',
-                color='shift',
-                title="📦 Points Distribution by Shift",
-                height=400
-            ), use_container_width=True)
+            try:
+                fig = px.box(
+                    df_range,
+                    x='shift',
+                    y='points/half day',
+                    color='shift',
+                    title="📦 Points Distribution by Shift",
+                    height=400
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error rendering shift distribution: {str(e)}")
 
     # ---- Deep Insights ----
     with tab3:
@@ -250,32 +266,41 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            st.plotly_chart(px.histogram(
-                df,
-                x='day_of_week',
-                color='shift',
-                barmode='group',
-                title="📅 Weekly Shift Distribution",
-                height=400
-            ), use_container_width=True)
+            try:
+                st.plotly_chart(px.histogram(
+                    df,
+                    x='day_of_week',
+                    color='shift',
+                    barmode='group',
+                    title="📅 Weekly Shift Distribution",
+                    height=400
+                ), use_container_width=True)
+            except Exception as e:
+                st.error(f"Error rendering shift distribution: {str(e)}")
 
         with col2:
-            st.plotly_chart(px.density_heatmap(
-                df,
-                x='date',
-                y='author',
-                z='points/half day',
-                title="🔥 Productivity Heatmap",
-                height=400
-            ), use_container_width=True)
+            try:
+                st.plotly_chart(px.density_heatmap(
+                    df,
+                    x='date',
+                    y='author',
+                    z='points/half day',
+                    title="🔥 Productivity Heatmap",
+                    height=400
+                ), use_container_width=True)
+            except Exception as e:
+                st.error(f"Error rendering heatmap: {str(e)}")
 
-        st.plotly_chart(px.scatter_matrix(
-            df,
-            dimensions=['points/half day', 'procedure/half', 'turnaround'],
-            color='shift',
-            title="📌 Multi-Dimensional Analysis",
-            height=600
-        ), use_container_width=True)
+        try:
+            st.plotly_chart(px.scatter_matrix(
+                df,
+                dimensions=['points/half day', 'procedure/half', 'turnaround'],
+                color='shift',
+                title="📌 Multi-Dimensional Analysis",
+                height=600
+            ), use_container_width=True)
+        except Exception as e:
+            st.error(f"Error rendering scatter matrix: {str(e)}")
 
 if __name__ == "__main__":
     main()
