@@ -122,6 +122,22 @@ def main():
                                    title="Avg Points per Half-Day per Provider"),
                             use_container_width=True)
         
+        col3, col4 = st.columns(2)
+        with col3:
+            st.plotly_chart(px.bar(provider_summary.sort_values("Total Procedures", ascending=True),
+                                   x="Total Procedures", y="Author", orientation='h',
+                                   text="Total Procedures", color="Total Procedures",
+                                   color_continuous_scale='Viridis',
+                                   title="Total Procedures per Provider"),
+                            use_container_width=True)
+        with col4:
+            st.plotly_chart(px.bar(provider_summary.sort_values("Avg Procedures/HD", ascending=True),
+                                   x="Avg Procedures/HD", y="Author", orientation='h',
+                                   text="Avg Procedures/HD", color="Avg Procedures/HD",
+                                   color_continuous_scale='Viridis',
+                                   title="Avg Procedures per Half-Day per Provider"),
+                            use_container_width=True)
+        
         st.subheader("🔍 Detailed Data")
         search = st.text_input("Search providers (Trends):")
         filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
