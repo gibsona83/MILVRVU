@@ -17,6 +17,7 @@ COLOR_SCALE = "Viridis"
 def load_data(file_path):
     """Load and preprocess data from an Excel file."""
     try:
+        uploaded_file.seek(0)  # Reset file pointer for re-reads
         xls = pd.ExcelFile(file_path)
         df = xls.parse(xls.sheet_names[0])
 
@@ -53,8 +54,10 @@ def load_data(file_path):
 
 # ---- Main Application ----
 def main():
-    st.sidebar.image("milv.png", width=250)
-    uploaded_file = st.sidebar.file_uploader("📤 Upload RVU File", type=["xlsx"])
+    # Sidebar (mobile-friendly adjustments)
+    with st.sidebar:
+        st.image("milv.png", width=200)
+        uploaded_file = st.file_uploader("📤 Upload RVU File", type=["xlsx"])
 
     if uploaded_file:
         try:
@@ -94,7 +97,7 @@ def main():
             filtered_latest = df_latest[df_latest[display_cols["author"]].isin(selected_providers)] if selected_providers else df_latest
 
             # Bar charts sorted high to low
-            col1, col2 = st.columns(2)
+            col1, col2 = st.columns(1 if st.session_state.get("mobile") else 2)
             with col1:
                 st.plotly_chart(
                     px.bar(
@@ -169,43 +172,6 @@ def main():
             markers=True,
         )
         st.plotly_chart(fig, use_container_width=True)
-
-        # Aggregate provider performance
-        provider_summary = df_filtered_trend.groupby(display_cols["author"]).agg({
-            display_cols["points/half day"]: "mean",
-            display_cols["procedure/half"]: "mean",
-        }).reset_index()
-
-        # Sorted bar charts
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(
-                px.bar(
-                    provider_summary.sort_values(display_cols["points/half day"], ascending=False),
-                    x=display_cols["points/half day"],
-                    y=display_cols["author"],
-                    orientation="h",
-                    text=display_cols["points/half day"],
-                    color=display_cols["points/half day"],
-                    color_continuous_scale=COLOR_SCALE,
-                    title="🏆 Avg Points per Half-Day",
-                ),
-                use_container_width=True,
-            )
-        with col2:
-            st.plotly_chart(
-                px.bar(
-                    provider_summary.sort_values(display_cols["procedure/half"], ascending=False),
-                    x=display_cols["procedure/half"],
-                    y=display_cols["author"],
-                    orientation="h",
-                    text=display_cols["procedure/half"],
-                    color=display_cols["procedure/half"],
-                    color_continuous_scale=COLOR_SCALE,
-                    title="⚡ Avg Procedures per Half-Day",
-                ),
-                use_container_width=True,
-            )
 
         st.subheader("📋 Detailed Data")
         st.dataframe(df_filtered_trend, use_container_width=True)
