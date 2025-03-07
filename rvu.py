@@ -8,7 +8,7 @@ st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # ---- Constants ----
 FILE_STORAGE_PATH = "latest_rvu.xlsx"
-REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
+REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "turnaround", "shift", 
                     "points/half day", "procedure/half"}
 COLOR_SCALE = "Viridis"
 
@@ -39,8 +39,12 @@ def load_data(file_path):
         df.dropna(subset=[date_col], inplace=True)
 
         # Convert numeric columns
-        numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col not in ["date", "author"]]
+        numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col not in ["date", "author", "turnaround"]]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+
+        # Convert turnaround time to minutes
+        turnaround_col = col_map["turnaround"]
+        df[turnaround_col] = pd.to_timedelta(df[turnaround_col], errors="coerce").dt.total_seconds() / 60
 
         # Format author names
         author_col = col_map["author"]
@@ -113,36 +117,6 @@ def main():
 
             filtered_latest = df_latest[df_latest[display_cols["author"]].isin(selected_providers)] if selected_providers else df_latest
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(
-                    px.bar(
-                        filtered_latest.sort_values(display_cols["points/half day"], ascending=False),
-                        x=display_cols["points/half day"],
-                        y=display_cols["author"],
-                        orientation="h",
-                        text=display_cols["points/half day"],
-                        color=display_cols["points/half day"],
-                        color_continuous_scale=COLOR_SCALE,
-                        title="🏆 Points per Half-Day",
-                    ),
-                    use_container_width=True,
-                )
-            with col2:
-                st.plotly_chart(
-                    px.bar(
-                        filtered_latest.sort_values(display_cols["procedure/half"], ascending=False),
-                        x=display_cols["procedure/half"],
-                        y=display_cols["author"],
-                        orientation="h",
-                        text=display_cols["procedure/half"],
-                        color=display_cols["procedure/half"],
-                        color_continuous_scale=COLOR_SCALE,
-                        title="⚡ Procedures per Half-Day",
-                    ),
-                    use_container_width=True,
-                )
-
             st.subheader("📋 Detailed Data")
             st.dataframe(filtered_latest, use_container_width=True)
 
@@ -167,38 +141,56 @@ def main():
             st.warning("⚠️ No data available for the selected range")
             return
 
-        selected_providers_trend = st.multiselect(
-            "🔍 Select providers:",
-            options=df_range[display_cols["author"]].unique(),
-            default=None,
-            placeholder="Type or select provider...",
-            format_func=lambda x: f"👤 {x}",
+        st.subheader("📊 Average Daily Performance Trends")
+        fig = px.line(
+            df_range.groupby(display_cols["date"]).mean(numeric_only=True).reset_index(),
+            x=display_cols["date"],
+            y=[display_cols["points/half day"], display_cols["procedure/half"]],
+            title="📈 Average Points & Procedures Per Half-Day",
+            markers=True,
         )
+        st.plotly_chart(fig, use_container_width=True)
 
-        df_filtered_trend = df_range[df_range[display_cols["author"]].isin(selected_providers_trend)] if selected_providers_trend else df_range
-
-        st.subheader("📊 Average Provider Performance")
-        provider_summary = df_filtered_trend.groupby(display_cols["author"]).agg({
+        # Provider-level averages
+        st.subheader("📊 Provider-Level Performance (Averages)")
+        provider_summary = df_range.groupby(display_cols["author"]).agg({
             display_cols["points/half day"]: "mean",
             display_cols["procedure/half"]: "mean",
+            display_cols["turnaround"]: "mean",
         }).reset_index()
 
-        st.plotly_chart(
-            px.bar(
-                provider_summary.sort_values(display_cols["points/half day"], ascending=False),
-                x=display_cols["points/half day"],
-                y=display_cols["author"],
-                orientation="h",
-                text=display_cols["points/half day"],
-                color=display_cols["points/half day"],
-                color_continuous_scale=COLOR_SCALE,
-                title="🏆 Avg Points per Half-Day",
-            ),
-            use_container_width=True,
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(
+                px.bar(
+                    provider_summary.sort_values(display_cols["points/half day"], ascending=False),
+                    x=display_cols["points/half day"],
+                    y=display_cols["author"],
+                    orientation="h",
+                    text=display_cols["points/half day"],
+                    color=display_cols["points/half day"],
+                    color_continuous_scale=COLOR_SCALE,
+                    title="🏆 Avg Points per Half-Day",
+                ),
+                use_container_width=True,
+            )
+        with col2:
+            st.plotly_chart(
+                px.bar(
+                    provider_summary.sort_values(display_cols["turnaround"], ascending=False),
+                    x=display_cols["turnaround"],
+                    y=display_cols["author"],
+                    orientation="h",
+                    text=display_cols["turnaround"],
+                    color=display_cols["turnaround"],
+                    color_continuous_scale=COLOR_SCALE,
+                    title="⏳ Avg Turnaround Time (mins)",
+                ),
+                use_container_width=True,
+            )
 
         st.subheader("📋 Detailed Data")
-        st.dataframe(df_filtered_trend, use_container_width=True)
+        st.dataframe(df_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
