@@ -42,9 +42,10 @@ def load_data(file_path):
         numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col not in ["date", "author", "turnaround"]]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
 
-        # Convert turnaround time to minutes
+        # ✅ Fix Turnaround Time Conversion
         turnaround_col = col_map["turnaround"]
-        df[turnaround_col] = pd.to_timedelta(df[turnaround_col], errors="coerce").dt.total_seconds() / 60
+        df[turnaround_col] = df[turnaround_col].astype(str)  # Convert to string first
+        df[turnaround_col] = pd.to_timedelta(df[turnaround_col], errors="coerce").dt.total_seconds() / 60  # Convert to minutes
 
         # Format author names
         author_col = col_map["author"]
