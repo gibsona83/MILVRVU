@@ -19,6 +19,7 @@ REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift",
                     "points/half day", "procedure/half", "turnaround"}
 COLOR_SCALE = 'Viridis'
 DATE_FORMAT = "%b %d, %Y"
+NUMERIC_COLS = ['points', 'points/half day', 'procedure/half', 'turnaround']
 
 # ---- Session State Initialization ----
 if 'last_upload' not in st.session_state:
@@ -30,7 +31,8 @@ def load_data(uploaded_file):
     """Optimized data loading and preprocessing with persistent caching"""
     try:
         df = pd.read_excel(io.BytesIO(uploaded_file.getbuffer()), 
-                          sheet_name=0, engine='openpyxl')
+                          sheet_name=0, 
+                          engine='openpyxl')
 
         # Clean and validate columns
         df.columns = df.columns.str.strip().str.lower()
@@ -44,8 +46,7 @@ def load_data(uploaded_file):
         df = df.dropna(subset=['date']).copy()
         
         # Convert numeric columns
-        numeric_cols = ['points', 'points/half day', 'procedure/half']
-        df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
+        df[NUMERIC_COLS] = df[NUMERIC_COLS].apply(pd.to_numeric, errors='coerce').fillna(0)
 
         # Convert turnaround time
         df['turnaround'] = pd.to_timedelta(
@@ -75,8 +76,7 @@ def create_combined_chart(df, x_col, y_cols, title):
             mode='lines+markers',
             name=col.title(),
             line=dict(width=2)
-        ))  # Corrected parentheses closure here
-    
+        ))
     fig.update_layout(
         title=title,
         xaxis_title=x_col.title(),
@@ -202,8 +202,10 @@ def main():
         # Enhanced visualizations
         col1, col2 = st.columns(2)
         with col1:
+            # Daily performance trends
+            df_daily = df_range.set_index('date')[NUMERIC_COLS].resample('D').mean().reset_index()
             st.plotly_chart(create_combined_chart(
-                df_range.resample('D', on='date').mean().reset_index(),
+                df_daily,
                 'date',
                 ['points/half day', 'procedure/half'],
                 "📈 Daily Performance Trends"
@@ -217,13 +219,16 @@ def main():
                 color='author',
                 size='turnaround',
                 title="📊 Productivity Correlation Analysis",
-                height=400
+                height=400,
+                hover_data=['date', 'shift']
             ), use_container_width=True)
 
         col3, col4 = st.columns(2)
         with col3:
+            # Weekly turnaround trends
+            df_weekly = df_range.set_index('date')[['turnaround']].resample('W').mean().reset_index()
             st.plotly_chart(create_combined_chart(
-                df_range.resample('W', on='date').mean().reset_index(),
+                df_weekly,
                 'date',
                 ['turnaround'],
                 "⏳ Weekly Turnaround Trends"
