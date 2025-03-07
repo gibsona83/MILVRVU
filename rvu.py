@@ -55,7 +55,7 @@ def load_data(uploaded_file):
 
         # Clean string columns
         df['author'] = df['author'].astype(str).str.strip().str.title()
-        df['shift'] = df['shift'].astype(str).str.strip().str.title()
+        df['shift'] = pd.to_numeric(df['shift'], errors='coerce').fillna(0).astype(int)
 
         # Add derived metrics
         df['week_number'] = df['date'].dt.isocalendar().week
@@ -77,7 +77,7 @@ def create_combined_chart(df, x_col, y_cols, title):
             mode='lines+markers',
             name=col.title(),
             line=dict(width=2)
-        )
+        ))
     fig.update_layout(
         title=title,
         xaxis_title=x_col.title(),
@@ -100,7 +100,7 @@ def main():
         )
         if uploaded_file:
             st.session_state.last_upload = uploaded_file
-        elif st.session_state.last_upload:
+        elif st.session_state.last_upload is not None:
             uploaded_file = st.session_state.last_upload
 
     if not uploaded_file:
@@ -119,66 +119,6 @@ def main():
     # Main interface
     st.title("📈 MILV Productivity Dashboard")
     tab1, tab2, tab3 = st.tabs(["📅 Daily Performance", "📈 Trend Analysis", "🔍 Deep Insights"])
-
-    # ---- Daily View ----
-    with tab1:
-        st.subheader(f"🗓️ {max_date.strftime(DATE_FORMAT)}")
-        df_daily = df[df['date'].dt.date == max_date].copy()
-
-        if df_daily.empty:
-            return st.warning("⚠️ No data available for latest date")
-
-        # Provider selection
-        selected_providers = st.multiselect(
-            "🔍 Filter providers:", 
-            options=df_daily['author'].unique(),
-            default=None,
-            placeholder="Type or select provider...",
-            format_func=lambda x: f"👤 {x}"
-        )
-
-        filtered = df_daily if not selected_providers else df_daily[df_daily['author'].isin(selected_providers)]
-
-        # Metrics row
-        cols = st.columns(4)
-        cols[0].metric("Total Providers", filtered['author'].nunique())
-        cols[1].metric("Avg Points/HD", f"{filtered['points/half day'].mean():.1f}")
-        cols[2].metric("Avg Procedures/HD", f"{filtered['procedure/half'].mean():.1f}")
-        cols[3].metric("Avg Turnaround", f"{filtered['turnaround'].mean():.1f} min")
-
-        # Visualizations
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = px.bar(
-                filtered.sort_values('points/half day', ascending=False),
-                x='points/half day',
-                y='author',
-                orientation='h',
-                color='points/half day',
-                color_continuous_scale=COLOR_SCALE,
-                title="🏆 Points per Half-Day",
-                text=np.round(filtered['points/half day'], 1),
-                height=400
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            fig = px.bar(
-                filtered.sort_values('procedure/half', ascending=False),
-                x='procedure/half',
-                y='author',
-                orientation='h',
-                color='procedure/half',
-                color_continuous_scale=COLOR_SCALE,
-                title="⚡ Procedures per Half-Day",
-                text=np.round(filtered['procedure/half'], 1),
-                height=400
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Data table
-        with st.expander("📋 View Detailed Data"):
-            st.dataframe(filtered, use_container_width=True)
 
     # ---- Trend Analysis ----
     with tab2:
@@ -203,7 +143,6 @@ def main():
         # Enhanced visualizations
         col1, col2 = st.columns(2)
         with col1:
-            # Daily performance trends
             try:
                 df_daily = df_range.set_index('date')[NUMERIC_COLS].resample('D').mean().reset_index()
                 st.plotly_chart(create_combined_chart(
@@ -233,74 +172,8 @@ def main():
             except Exception as e:
                 st.error(f"Error rendering correlation analysis: {str(e)}")
 
-        col3, col4 = st.columns(2)
-        with col3:
-            try:
-                df_weekly = df_range.set_index('date')[['turnaround']].resample('W').mean().reset_index()
-                st.plotly_chart(create_combined_chart(
-                    df_weekly,
-                    'date',
-                    ['turnaround'],
-                    "⏳ Weekly Turnaround Trends"
-                ), use_container_width=True)
-            except Exception as e:
-                st.error(f"Error rendering weekly trends: {str(e)}")
-
-        with col4:
-            try:
-                fig = px.box(
-                    df_range,
-                    x='shift',
-                    y='points/half day',
-                    color='shift',
-                    title="📦 Points Distribution by Shift",
-                    height=400
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error rendering shift distribution: {str(e)}")
-
-    # ---- Deep Insights ----
-    with tab3:
-        st.subheader("🔍 Advanced Analytics")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            try:
-                st.plotly_chart(px.histogram(
-                    df,
-                    x='day_of_week',
-                    color='shift',
-                    barmode='group',
-                    title="📅 Weekly Shift Distribution",
-                    height=400
-                ), use_container_width=True)
-            except Exception as e:
-                st.error(f"Error rendering shift distribution: {str(e)}")
-
-        with col2:
-            try:
-                st.plotly_chart(px.density_heatmap(
-                    df,
-                    x='date',
-                    y='author',
-                    z='points/half day',
-                    title="🔥 Productivity Heatmap",
-                    height=400
-                ), use_container_width=True)
-            except Exception as e:
-                st.error(f"Error rendering heatmap: {str(e)}")
-
-        try:
-            st.plotly_chart(px.scatter_matrix(
-                df,
-                dimensions=['points/half day', 'procedure/half', 'turnaround'],
-                color='shift',
-                title="📌 Multi-Dimensional Analysis",
-                height=600
-            ), use_container_width=True)
-        except Exception as e:
-            st.error(f"Error rendering scatter matrix: {str(e)}")
+        with st.expander("📋 View Detailed Data"):
+            st.dataframe(df_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
