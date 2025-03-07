@@ -2,37 +2,24 @@ import streamlit as st
 import pandas as pd
 import io
 import plotly.express as px
-import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime, timedelta
 
 # ---- Page Configuration ----
-st.set_page_config(
-    page_title="MILV Productivity",
-    layout="wide",
-    page_icon="📊",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="MILV Productivity", layout="wide", page_icon="📊")
 
 # ---- Constants ----
 REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
                     "points/half day", "procedure/half", "turnaround"}
 COLOR_SCALE = 'Viridis'
 DATE_FORMAT = "%b %d, %Y"
-NUMERIC_COLS = ['points', 'points/half day', 'procedure/half', 'turnaround']
-
-# ---- Session State Initialization ----
-if 'last_upload' not in st.session_state:
-    st.session_state.last_upload = None
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False, ttl=3600)
 def load_data(uploaded_file):
-    """Optimized data loading and preprocessing with persistent caching"""
+    """Load and preprocess Excel data using BytesIO for memory efficiency."""
     try:
-        df = pd.read_excel(io.BytesIO(uploaded_file.getbuffer()), 
-                          sheet_name=0, 
-                          engine='openpyxl')
+        df = pd.read_excel(io.BytesIO(uploaded_file.getbuffer()), sheet_name=0, engine='openpyxl')
 
         # Clean and validate columns
         df.columns = df.columns.str.strip().str.lower()
@@ -43,128 +30,138 @@ def load_data(uploaded_file):
 
         # Process date column
         df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.normalize()
-        df = df.dropna(subset=['date']).copy()
-        
+        df.dropna(subset=['date'], inplace=True)
+
         # Convert numeric columns
-        df[NUMERIC_COLS] = df[NUMERIC_COLS].apply(pd.to_numeric, errors='coerce').fillna(0)
+        numeric_cols = ['points', 'points/half day', 'procedure/half', 'turnaround']
+        df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
 
         # Convert turnaround time
         df['turnaround'] = pd.to_timedelta(df['turnaround'].astype(str), errors="coerce").dt.total_seconds() / 60
 
-        # Clean string columns
+        # Format author names
         df['author'] = df['author'].astype(str).str.strip().str.title()
-        df['shift'] = pd.to_numeric(df['shift'], errors='coerce').fillna(0).astype(int)
 
-        # Add derived metrics
-        df['week_number'] = df['date'].dt.isocalendar().week
-        df['month'] = df['date'].dt.month_name()
-        df['day_of_week'] = df['date'].dt.day_name()
+        # Sort by date (newest first)
+        df.sort_values('date', ascending=False, inplace=True)
 
-        return df.sort_values('date', ascending=False)
+        return df
     except Exception as e:
         st.error(f"🚨 Error processing file: {str(e)}")
         return None
 
-def create_combined_chart(df, x_col, y_cols, title):
-    """Create interactive line chart with multiple traces"""
-    fig = go.Figure()
-    for col in y_cols:
-        fig.add_trace(go.Scatter(
-            x=df[x_col],
-            y=df[col],
-            mode='lines+markers',
-            name=col.title(),
-            line=dict(width=2)
-        ))
-    fig.update_layout(
+def create_bar_chart(data, x, y, title, color_col):
+    """Create a bar chart with consistent formatting."""
+    return px.bar(
+        data.sort_values(x, ascending=False),
+        x=x,
+        y=y,
+        orientation='h',
+        color=color_col,
+        color_continuous_scale=COLOR_SCALE,
         title=title,
-        xaxis_title=x_col.title(),
-        yaxis_title="Value",
-        hovermode="x unified",
-        template="plotly_dark",
+        text=np.round(data[x], 1),
         height=400
-    )
-    return fig
+    ).update_layout(showlegend=False, margin=dict(l=50, r=20, t=45, b=20))
 
 # ---- Main Application ----
 def main():
     with st.sidebar:
         st.image("milv.png", width=200)
-        uploaded_file = st.file_uploader(
-            "📤 Upload File",
-            type=["xlsx"],
-            help="XLSX files only",
-            key="file_uploader"
-        )
-        if uploaded_file:
-            st.session_state.last_upload = uploaded_file
-        elif st.session_state.last_upload is not None:
-            uploaded_file = st.session_state.last_upload
+        uploaded_file = st.file_uploader("📤 Upload File", type=["xlsx"], help="XLSX files only")
 
     if not uploaded_file:
         return st.info("📁 Please upload a file to begin analysis")
 
     with st.spinner("📊 Processing data..."):
         df = load_data(uploaded_file)
-    
+
     if df is None:
         return
 
-    # Date range calculations
+    # Get date range
     max_date = df['date'].max().date()
     min_date = df['date'].min().date()
-    
+
     # Main interface
     st.title("📈 MILV Productivity Dashboard")
-    tab1, tab2, tab3 = st.tabs(["📅 Daily Performance", "📈 Trend Analysis", "🔍 Deep Insights"])
+    tab1, tab2 = st.tabs(["📅 Daily Performance", "📈 Trend Analysis"])
 
-    # ---- Daily Performance ----
+    # ---- Daily Performance Tab ----
     with tab1:
         st.subheader(f"🗓️ {max_date.strftime(DATE_FORMAT)}")
         df_daily = df[df['date'].dt.date == max_date].copy()
 
         if df_daily.empty:
-            st.warning("⚠️ No data available for latest date")
+            st.warning("⚠️ No data available for the latest date")
 
-        st.dataframe(df_daily, use_container_width=True)  # ✅ Ensure tab always loads
+        selected_providers = st.multiselect(
+            "🔍 Filter providers:", 
+            options=df_daily['author'].unique(),
+            default=df_daily['author'].unique(),  # Pre-select all providers
+            placeholder="Type or select provider...",
+        )
 
-    # ---- Trend Analysis ----
+        filtered = df_daily[df_daily['author'].isin(selected_providers)] if selected_providers else df_daily
+
+        # Metrics
+        cols = st.columns(3)
+        cols[0].metric("Total Providers", filtered['author'].nunique())
+        cols[1].metric("Avg Points/HD", f"{filtered['points/half day'].mean():.1f}")
+        cols[2].metric("Avg Procedures/HD", f"{filtered['procedure/half'].mean():.1f}")
+
+        # Visualizations
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(create_bar_chart(filtered, 'points/half day', 'author', "🏆 Points per Half-Day", 'points/half day'), use_container_width=True)
+        with col2:
+            st.plotly_chart(create_bar_chart(filtered, 'procedure/half', 'author', "⚡ Procedures per Half-Day", 'procedure/half'), use_container_width=True)
+
+        # Data table
+        with st.expander("📋 View Detailed Data"):
+            st.dataframe(filtered, use_container_width=True)
+
+    # ---- Trend Analysis Tab ----
     with tab2:
         st.subheader("📈 Date Range Analysis")
-        
-        dates = st.date_input(
-            "🗓️ Date Range",
-            value=[max_date - timedelta(days=7), max_date],
-            min_value=min_date,
-            max_value=max_date
-        )
+
+        dates = st.date_input("🗓️ Date Range", value=[max_date - timedelta(days=7), max_date], min_value=min_date, max_value=max_date)
 
         if len(dates) != 2 or dates[0] > dates[1]:
             st.error("❌ Invalid date range")
             st.stop()
 
         df_range = df[df['date'].between(pd.Timestamp(dates[0]), pd.Timestamp(dates[1]))].copy()
-        
+
         if df_range.empty:
-            st.warning("⚠️ No data in selected range")
+            return st.warning("⚠️ No data in selected range")
 
-        st.plotly_chart(create_combined_chart(df_range, "date", ["points/half day", "procedure/half"], "📈 Daily Performance Trends"), use_container_width=True)
+        # Provider selection
+        selected_providers_trend = st.multiselect(
+            "🔍 Filter providers:",
+            options=df_range['author'].unique(),
+            default=df_range['author'].unique(),
+            placeholder="Type or select provider..."
+        )
 
-        valid_data = df_range.dropna(subset=["points/half day", "procedure/half", "turnaround"])
-        if not valid_data.empty:  # ✅ Fix: Ensure scatter plot has data
-            st.plotly_chart(px.scatter(valid_data, x="points/half day", y="procedure/half", color="author", size="turnaround", title="📊 Productivity Correlation Analysis", height=400, size_max=15), use_container_width=True)
+        df_filtered_trend = df_range[df_range['author'].isin(selected_providers_trend)] if selected_providers_trend else df_range
 
-    # ---- Deep Insights ----
-    with tab3:
-        st.subheader("🔍 Advanced Analytics")
+        # Line Chart - Performance Trends
+        st.plotly_chart(px.line(df_filtered_trend, x='date', y=['points/half day', 'procedure/half'], title="📈 Performance Trends", markers=True), use_container_width=True)
 
-        if not df.empty:  # ✅ Fix: Ensure Deep Insights tab loads
-            st.plotly_chart(px.histogram(df, x="day_of_week", color="shift", barmode="group", title="📅 Weekly Shift Distribution", height=400), use_container_width=True)
-            st.plotly_chart(px.density_heatmap(df, x="date", y="author", z="points/half day", title="🔥 Productivity Heatmap", height=400), use_container_width=True)
+        # Provider-Level Trends
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(create_bar_chart(df_filtered_trend.groupby('author')['points/half day'].mean().reset_index(), 'points/half day', 'author', "🏆 Avg Points per Half-Day", 'points/half day'), use_container_width=True)
+        with col2:
+            st.plotly_chart(create_bar_chart(df_filtered_trend.groupby('author')['procedure/half'].mean().reset_index(), 'procedure/half', 'author', "⚡ Avg Procedures per Half-Day", 'procedure/half'), use_container_width=True)
 
-            scatter_matrix_data = df.dropna(subset=["points/half day", "procedure/half", "turnaround"])
-            if not scatter_matrix_data.empty:
-                st.plotly_chart(px.scatter_matrix(scatter_matrix_data, dimensions=["points/half day", "procedure/half", "turnaround"], color="shift", title="📌 Multi-Dimensional Analysis", height=600), use_container_width=True)
+        # Histogram - Shift Distribution
+        st.plotly_chart(px.histogram(df_filtered_trend, x="shift", nbins=10, title="📌 Shift Distribution"), use_container_width=True)
+
+        # Data Table
+        with st.expander("📋 View Detailed Data"):
+            st.dataframe(df_filtered_trend, use_container_width=True)
 
 if __name__ == "__main__":
     main()
