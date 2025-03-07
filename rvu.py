@@ -123,44 +123,43 @@ def main():
 
     # ---- Trend Analysis Tab ----
     with tab2:
-        st.subheader("📈 Date Range Analysis")
+    st.subheader("📈 Date Range Analysis")
 
-        dates = st.date_input("🗓️ Date Range", value=[max_date - timedelta(days=7), max_date], min_value=min_date, max_value=max_date)
+    dates = st.date_input("🗓️ Date Range", value=[max_date - timedelta(days=7), max_date], min_value=min_date, max_value=max_date)
 
-        if len(dates) != 2 or dates[0] > dates[1]:
-            st.error("❌ Invalid date range")
-            st.stop()
+    if len(dates) != 2 or dates[0] > dates[1]:
+        st.error("❌ Invalid date range")
+        st.stop()
 
-        df_range = df[df['date'].between(pd.Timestamp(dates[0]), pd.Timestamp(dates[1]))].copy()
+    df_range = df[df['date'].between(pd.Timestamp(dates[0]), pd.Timestamp(dates[1]))].copy()
 
-        if df_range.empty:
-            return st.warning("⚠️ No data in selected range")
+    if df_range.empty:
+        return st.warning("⚠️ No data in selected range")
 
-        # 🔍 **Provider Searchable Dropdown for Trend Analysis**
-        provider_options_trend = ["👤 " + name for name in df_range['author'].unique()]
-        selected_provider_trend = st.selectbox("🔍 Search providers (Trend Analysis):", ["👤 All"] + provider_options_trend)
+    # 🔍 **Provider Searchable Dropdown for Trend Analysis**
+    provider_options_trend = ["👤 " + name for name in df_range['author'].unique()]
+    selected_provider_trend = st.selectbox("🔍 Search providers (Trend Analysis):", ["👤 All"] + provider_options_trend)
 
-        # Filter DataFrame
-        if selected_provider_trend != "👤 All":
-            selected_provider_trend_name = selected_provider_trend.replace("👤 ", "")
-            df_range = df_range[df_range['author'] == selected_provider_trend_name]
+    # Filter DataFrame
+    if selected_provider_trend != "👤 All":
+        selected_provider_trend_name = selected_provider_trend.replace("👤 ", "")
+        df_range = df_range[df_range['author'] == selected_provider_trend_name]
 
-        # Line Chart - Performance Trends
-        st.plotly_chart(px.line(df_range, x='date', y=['points/half day', 'procedure/half'], title="📈 Performance Trends", markers=True), use_container_width=True)
+    # Line Chart - Performance Trends
+    st.plotly_chart(px.line(df_range, x='date', y=['points/half day', 'procedure/half'], title="📈 Performance Trends", markers=True), use_container_width=True)
 
-        # Provider-Level Trends
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(create_bar_chart(df_range.groupby('author')['points/half day'].mean().reset_index(), 'points/half day', 'author', "🏆 Avg Points per Half-Day", 'points/half day'), use_container_width=True)
-        with col2:
-            st.plotly_chart(create_bar_chart(df_range.groupby('author')['procedure/half'].mean().reset_index(), 'procedure/half', 'author', "⚡ Avg Procedures per Half-Day", 'procedure/half'), use_container_width=True)
+    # Provider-Level Trends
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(create_bar_chart(df_range.groupby('author')['points/half day'].mean().reset_index(), 'points/half day', 'author', "🏆 Avg Points per Half-Day", 'points/half day'), use_container_width=True)
+    with col2:
+        st.plotly_chart(create_bar_chart(df_range.groupby('author')['procedure/half'].mean().reset_index(), 'procedure/half', 'author', "⚡ Avg Procedures per Half-Day", 'procedure/half'), use_container_width=True)
 
-        # Histogram - Shift Distribution
-        st.plotly_chart(px.histogram(df_range, x="shift", nbins=10, title="📌 Shift Distribution"), use_container_width=True)
+    # ✅ **Updated Shift Distribution Chart**
+    df_range['shift_category'] = df_range['shift'].apply(lambda x: "Half Day" if x == 1 else "Full Day")
 
-        # Data Table
-        with st.expander("📋 View Detailed Data"):
-            st.dataframe(df_range, use_container_width=True)
+    st.plotly_chart(px.histogram(df_range, x="shift_category", title="📌 Shift Distribution (Half vs Full Day)", color="shift_category", barmode="group"), use_container_width=True)
 
-if __name__ == "__main__":
-    main()
+    # Data Table
+    with st.expander("📋 View Detailed Data"):
+        st.dataframe(df_range, use_container_width=True)
