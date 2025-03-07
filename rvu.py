@@ -1,24 +1,22 @@
 import streamlit as st
 import pandas as pd
-import os
+import io
 import plotly.express as px
 
 # ---- Page Configuration ----
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # ---- Constants ----
-FILE_STORAGE_PATH = "latest_rvu.xlsx"
 REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "turnaround", "shift", 
                     "points/half day", "procedure/half"}
 COLOR_SCALE = "Viridis"
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
-def load_data(file_path):
-    """Load and preprocess data from an Excel file."""
+def load_data(uploaded_file):
+    """Load and preprocess data from an uploaded Excel file using BytesIO."""
     try:
-        xls = pd.ExcelFile(file_path)
-        df = xls.parse(xls.sheet_names[0])
+        df = pd.read_excel(io.BytesIO(uploaded_file.getbuffer()))
 
         # Clean column names (case-insensitive)
         df.columns = df.columns.str.strip()
@@ -44,8 +42,8 @@ def load_data(file_path):
 
         # ✅ Fix Turnaround Time Conversion
         turnaround_col = col_map["turnaround"]
-        df[turnaround_col] = df[turnaround_col].astype(str)  # Convert to string first
-        df[turnaround_col] = pd.to_timedelta(df[turnaround_col], errors="coerce").dt.total_seconds() / 60  # Convert to minutes
+        df[turnaround_col] = df[turnaround_col].astype(str)
+        df[turnaround_col] = pd.to_timedelta(df[turnaround_col], errors="coerce").dt.total_seconds() / 60
 
         # Format author names
         author_col = col_map["author"]
@@ -58,29 +56,17 @@ def load_data(file_path):
 
 # ---- Main Application ----
 def main():
-    # Sidebar (including latest uploaded date)
+    # Sidebar
     st.sidebar.image("milv.png", width=200)
-    
-    # File uploader
     uploaded_file = st.sidebar.file_uploader("📤 Upload RVU File", type=["xlsx"])
 
-    # Handle file storage
-    if uploaded_file:
-        try:
-            with open(FILE_STORAGE_PATH, "wb") as f:
-                f.write(uploaded_file.getbuffer())  # Save file locally
-            st.session_state["last_uploaded"] = uploaded_file.name  # Store filename in session state
-            st.success(f"✅ {uploaded_file.name} uploaded successfully!")
-        except Exception as e:
-            st.error(f"❌ Upload failed: {str(e)}")
-
-    # Load the latest available file if it exists
-    if os.path.exists(FILE_STORAGE_PATH):
-        with st.spinner("📊 Processing data..."):
-            df = load_data(FILE_STORAGE_PATH)
-    else:
+    if not uploaded_file:
         st.sidebar.info("📅 Latest Date: No data uploaded yet.")
         return st.info("ℹ️ Please upload a file to begin analysis")
+
+    # Load Data
+    with st.spinner("📊 Processing data..."):
+        df = load_data(uploaded_file)
 
     if df is None:
         st.sidebar.info("📅 Latest Date: No data available.")
@@ -91,8 +77,7 @@ def main():
     st.sidebar.success(f"📅 Latest Date: {latest_date.strftime('%b %d, %Y')}")
 
     # Display last uploaded file name
-    last_uploaded_file = st.session_state.get("last_uploaded", "No file uploaded")
-    st.sidebar.info(f"📂 Last Uploaded File: {last_uploaded_file}")
+    st.sidebar.info(f"📂 Last Uploaded File: {uploaded_file.name}")
 
     col_map = {col.lower(): col for col in df.columns}
     display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
