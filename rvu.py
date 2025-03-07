@@ -51,6 +51,21 @@ def load_data(file_path):
         st.error(f"🚨 Error: {str(e)}")
         return None
 
+def create_heatmap(df, date_col, author_col, metric_col):
+    """Create a heatmap visualization of provider performance over time."""
+    pivot_df = df.pivot_table(index=author_col, columns=date_col, values=metric_col, aggfunc='sum').fillna(0)
+    
+    fig = px.imshow(
+        pivot_df,
+        labels={'x': 'Date', 'y': 'Provider', 'color': metric_col},
+        aspect='auto',
+        color_continuous_scale='Viridis',
+        title=f"{metric_col} Heatmap by Provider"
+    )
+    
+    fig.update_layout(height=600, xaxis_title="Date", yaxis_title="Provider")
+    return fig
+
 # ---- Main Application ----
 def main():
     st.sidebar.image("milv.png", width=250)
@@ -74,33 +89,6 @@ def main():
     st.title("MILV Daily Productivity")
     tab1, tab2 = st.tabs(["📅 Daily View", "📈 Trend Analysis"])
     
-    with tab1:
-        st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
-        df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
-        
-        if not df_latest.empty:
-            st.subheader("🔍 Detailed Data")
-            search = st.text_input("Search providers:")
-            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
-            st.dataframe(filtered, use_container_width=True)
-            
-            st.subheader("📊 Performance")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(px.bar(filtered, x=display_cols["points/half day"], 
-                                       y=display_cols["author"], orientation='h', 
-                                       text=display_cols["points/half day"], 
-                                       color=display_cols["points/half day"],
-                                       color_continuous_scale='Viridis',
-                                       title="Points per Half-Day"), use_container_width=True)
-            with col2:
-                st.plotly_chart(px.bar(filtered, x=display_cols["procedure/half"], 
-                                       y=display_cols["author"], orientation='h', 
-                                       text=display_cols["procedure/half"], 
-                                       color=display_cols["procedure/half"],
-                                       color_continuous_scale='Viridis',
-                                       title="Procedures per Half-Day"), use_container_width=True)
-    
     with tab2:
         st.subheader("Date Range Analysis")
         
@@ -118,18 +106,22 @@ def main():
             st.warning("⚠️ No data in selected range")
             return
         
-        st.subheader("🔍 Detailed Data")
-        search = st.text_input("Search providers (Trends):")
-        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
-        st.dataframe(filtered_range, use_container_width=True)
-        
         st.subheader("📈 Trends")
-        fig = px.area(filtered_range, x=display_cols["date"], 
+        fig = px.area(df_range, x=display_cols["date"], 
                       y=[display_cols["points/half day"], display_cols["procedure/half"]],
                       title="Performance Trends", 
                       labels={display_cols["date"]: "Date", "value": "Value"},
                       height=400, markers=True)
         st.plotly_chart(fig, use_container_width=True)
+        
+        st.subheader("🔥 Heatmap View")
+        heatmap_fig = create_heatmap(df_range, display_cols["date"], display_cols["author"], display_cols["points/half day"])
+        st.plotly_chart(heatmap_fig, use_container_width=True)
+        
+        st.subheader("🔍 Detailed Data")
+        search = st.text_input("Search providers (Trends):")
+        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search, case=False)] if search else df_range
+        st.dataframe(filtered_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
