@@ -95,26 +95,31 @@ def main():
         if df_daily.empty:
             st.warning("⚠️ No data available for the latest date")
 
-        # 🔍 **Provider Search Box Instead of Multi-Select**
-        search_term = st.text_input("🔍 Search providers:", "").strip().lower()
-        filtered = df_daily[df_daily['author'].str.lower().str.contains(search_term)] if search_term else df_daily
+        # 🔍 **Provider Searchable Dropdown**
+        provider_options = ["👤 " + name for name in df_daily['author'].unique()]
+        selected_provider = st.selectbox("🔍 Search providers:", ["👤 All"] + provider_options)
+
+        # Filter DataFrame
+        if selected_provider != "👤 All":
+            selected_provider_name = selected_provider.replace("👤 ", "")
+            df_daily = df_daily[df_daily['author'] == selected_provider_name]
 
         # Metrics
         cols = st.columns(3)
-        cols[0].metric("Total Providers", filtered['author'].nunique())
-        cols[1].metric("Avg Points/HD", f"{filtered['points/half day'].mean():.1f}")
-        cols[2].metric("Avg Procedures/HD", f"{filtered['procedure/half'].mean():.1f}")
+        cols[0].metric("Total Providers", df_daily['author'].nunique())
+        cols[1].metric("Avg Points/HD", f"{df_daily['points/half day'].mean():.1f}")
+        cols[2].metric("Avg Procedures/HD", f"{df_daily['procedure/half'].mean():.1f}")
 
         # Visualizations
         col1, col2 = st.columns(2)
         with col1:
-            st.plotly_chart(create_bar_chart(filtered, 'points/half day', 'author', "🏆 Points per Half-Day", 'points/half day'), use_container_width=True)
+            st.plotly_chart(create_bar_chart(df_daily, 'points/half day', 'author', "🏆 Points per Half-Day", 'points/half day'), use_container_width=True)
         with col2:
-            st.plotly_chart(create_bar_chart(filtered, 'procedure/half', 'author', "⚡ Procedures per Half-Day", 'procedure/half'), use_container_width=True)
+            st.plotly_chart(create_bar_chart(df_daily, 'procedure/half', 'author', "⚡ Procedures per Half-Day", 'procedure/half'), use_container_width=True)
 
         # Data table
         with st.expander("📋 View Detailed Data"):
-            st.dataframe(filtered, use_container_width=True)
+            st.dataframe(df_daily, use_container_width=True)
 
     # ---- Trend Analysis Tab ----
     with tab2:
@@ -131,26 +136,31 @@ def main():
         if df_range.empty:
             return st.warning("⚠️ No data in selected range")
 
-        # 🔍 **Provider Search for Trend Analysis**
-        search_term_trend = st.text_input("🔍 Search providers (Trend Analysis):", "").strip().lower()
-        df_filtered_trend = df_range[df_range['author'].str.lower().str.contains(search_term_trend)] if search_term_trend else df_range
+        # 🔍 **Provider Searchable Dropdown for Trend Analysis**
+        provider_options_trend = ["👤 " + name for name in df_range['author'].unique()]
+        selected_provider_trend = st.selectbox("🔍 Search providers (Trend Analysis):", ["👤 All"] + provider_options_trend)
+
+        # Filter DataFrame
+        if selected_provider_trend != "👤 All":
+            selected_provider_trend_name = selected_provider_trend.replace("👤 ", "")
+            df_range = df_range[df_range['author'] == selected_provider_trend_name]
 
         # Line Chart - Performance Trends
-        st.plotly_chart(px.line(df_filtered_trend, x='date', y=['points/half day', 'procedure/half'], title="📈 Performance Trends", markers=True), use_container_width=True)
+        st.plotly_chart(px.line(df_range, x='date', y=['points/half day', 'procedure/half'], title="📈 Performance Trends", markers=True), use_container_width=True)
 
         # Provider-Level Trends
         col1, col2 = st.columns(2)
         with col1:
-            st.plotly_chart(create_bar_chart(df_filtered_trend.groupby('author')['points/half day'].mean().reset_index(), 'points/half day', 'author', "🏆 Avg Points per Half-Day", 'points/half day'), use_container_width=True)
+            st.plotly_chart(create_bar_chart(df_range.groupby('author')['points/half day'].mean().reset_index(), 'points/half day', 'author', "🏆 Avg Points per Half-Day", 'points/half day'), use_container_width=True)
         with col2:
-            st.plotly_chart(create_bar_chart(df_filtered_trend.groupby('author')['procedure/half'].mean().reset_index(), 'procedure/half', 'author', "⚡ Avg Procedures per Half-Day", 'procedure/half'), use_container_width=True)
+            st.plotly_chart(create_bar_chart(df_range.groupby('author')['procedure/half'].mean().reset_index(), 'procedure/half', 'author', "⚡ Avg Procedures per Half-Day", 'procedure/half'), use_container_width=True)
 
         # Histogram - Shift Distribution
-        st.plotly_chart(px.histogram(df_filtered_trend, x="shift", nbins=10, title="📌 Shift Distribution"), use_container_width=True)
+        st.plotly_chart(px.histogram(df_range, x="shift", nbins=10, title="📌 Shift Distribution"), use_container_width=True)
 
         # Data Table
         with st.expander("📋 View Detailed Data"):
-            st.dataframe(df_filtered_trend, use_container_width=True)
+            st.dataframe(df_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
