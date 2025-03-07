@@ -95,14 +95,9 @@ def main():
         if df_daily.empty:
             st.warning("⚠️ No data available for the latest date")
 
-        selected_providers = st.multiselect(
-            "🔍 Filter providers:", 
-            options=df_daily['author'].unique(),
-            default=df_daily['author'].unique(),  # Pre-select all providers
-            placeholder="Type or select provider...",
-        )
-
-        filtered = df_daily[df_daily['author'].isin(selected_providers)] if selected_providers else df_daily
+        # 🔍 **Provider Search Box Instead of Multi-Select**
+        search_term = st.text_input("🔍 Search providers:", "").strip().lower()
+        filtered = df_daily[df_daily['author'].str.lower().str.contains(search_term)] if search_term else df_daily
 
         # Metrics
         cols = st.columns(3)
@@ -136,15 +131,9 @@ def main():
         if df_range.empty:
             return st.warning("⚠️ No data in selected range")
 
-        # Provider selection
-        selected_providers_trend = st.multiselect(
-            "🔍 Filter providers:",
-            options=df_range['author'].unique(),
-            default=df_range['author'].unique(),
-            placeholder="Type or select provider..."
-        )
-
-        df_filtered_trend = df_range[df_range['author'].isin(selected_providers_trend)] if selected_providers_trend else df_range
+        # 🔍 **Provider Search for Trend Analysis**
+        search_term_trend = st.text_input("🔍 Search providers (Trend Analysis):", "").strip().lower()
+        df_filtered_trend = df_range[df_range['author'].str.lower().str.contains(search_term_trend)] if search_term_trend else df_range
 
         # Line Chart - Performance Trends
         st.plotly_chart(px.line(df_filtered_trend, x='date', y=['points/half day', 'procedure/half'], title="📈 Performance Trends", markers=True), use_container_width=True)
