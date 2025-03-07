@@ -103,7 +103,7 @@ def create_trend_chart(df, date_col, metrics):
     )
     
     fig.update_traces(line_width=4, marker_size=10, marker_line_width=2)
-    fig.update_xaxes(tickformat="%b %d", rangeslider_visible=True)
+    fig.update_xaxes(tickformat="%b %d")
     fig.update_yaxes(tickformat=".2f")
     fig.update_layout(plot_bgcolor='white')
     return fig
@@ -135,26 +135,19 @@ def main():
         st.subheader(f"Data for {max_date.strftime('%b %d, %Y')}")
         df_latest = df[df[display_cols["date"]] == pd.Timestamp(max_date)]
         
-        if not df_latest.empty:
-            cols = st.columns(4)
-            metrics = {
-                "Total Points": display_cols["points"],
-                "Total Procedures": display_cols["procedure"],
-                "Points/Half-Day": display_cols["points/half day"],
-                "Procedures/Half-Day": display_cols["procedure/half"]
-            }
-            for (title, col), c in zip(metrics.items(), cols):
-                value = df_latest[col].sum() if "Total" in title else df_latest[col].mean()
-                c.metric(title, f"{value:,.2f}")
-            
-            st.subheader("📊 Performance")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(create_performance_chart(df_latest, display_cols["points/half day"], 
-                                                         display_cols["author"], "Points per Half-Day"))
-            with col2:
-                st.plotly_chart(create_performance_chart(df_latest, display_cols["procedure/half"], 
-                                                         display_cols["author"], "Procedures per Half-Day"))
+        st.subheader("🔍 Detailed Data")
+        search = st.text_input("Search providers:")
+        filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
+        st.dataframe(filtered, use_container_width=True)
+        
+        st.subheader("📊 Performance")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(create_performance_chart(filtered, display_cols["points/half day"], 
+                                                     display_cols["author"], "Points per Half-Day"))
+        with col2:
+            st.plotly_chart(create_performance_chart(filtered, display_cols["procedure/half"], 
+                                                     display_cols["author"], "Procedures per Half-Day"))
     
     with tab2:
         st.subheader("Date Range Analysis")
