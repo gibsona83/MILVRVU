@@ -146,5 +146,59 @@ def main():
             st.subheader("📋 Detailed Data")
             st.dataframe(filtered_latest, use_container_width=True)
 
+    # ---- Trend Analysis ----
+    with tab2:
+        st.subheader("📈 Date Range Analysis")
+
+        dates = st.date_input(
+            "🗓️ Select Date Range (Start - End)",
+            value=[max_date - pd.DateOffset(days=7), max_date],
+            min_value=min_date,
+            max_value=max_date,
+        )
+
+        if len(dates) != 2 or dates[0] > dates[1]:
+            st.error("❌ Invalid date range")
+            return
+
+        df_range = df[df[display_cols["date"]].between(pd.Timestamp(dates[0]), pd.Timestamp(dates[1]))]
+
+        if df_range.empty:
+            st.warning("⚠️ No data available for the selected range")
+            return
+
+        selected_providers_trend = st.multiselect(
+            "🔍 Select providers:",
+            options=df_range[display_cols["author"]].unique(),
+            default=None,
+            placeholder="Type or select provider...",
+            format_func=lambda x: f"👤 {x}",
+        )
+
+        df_filtered_trend = df_range[df_range[display_cols["author"]].isin(selected_providers_trend)] if selected_providers_trend else df_range
+
+        st.subheader("📊 Average Provider Performance")
+        provider_summary = df_filtered_trend.groupby(display_cols["author"]).agg({
+            display_cols["points/half day"]: "mean",
+            display_cols["procedure/half"]: "mean",
+        }).reset_index()
+
+        st.plotly_chart(
+            px.bar(
+                provider_summary.sort_values(display_cols["points/half day"], ascending=False),
+                x=display_cols["points/half day"],
+                y=display_cols["author"],
+                orientation="h",
+                text=display_cols["points/half day"],
+                color=display_cols["points/half day"],
+                color_continuous_scale=COLOR_SCALE,
+                title="🏆 Avg Points per Half-Day",
+            ),
+            use_container_width=True,
+        )
+
+        st.subheader("📋 Detailed Data")
+        st.dataframe(df_filtered_trend, use_container_width=True)
+
 if __name__ == "__main__":
     main()
