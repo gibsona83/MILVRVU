@@ -52,17 +52,26 @@ def load_data(uploaded_file):
 
 # ---- Main Application ----
 def main():
+    # Sidebar (including latest uploaded date)
     st.sidebar.image("milv.png", width=200)
     uploaded_file = st.sidebar.file_uploader("📤 Upload RVU File", type=["xlsx"])
 
+    # Check if a file is uploaded
     if not uploaded_file:
+        st.sidebar.info("📅 Latest Date: No data uploaded yet.")
         return st.info("ℹ️ Please upload a file to begin analysis")
 
+    # Load data
     with st.spinner("📊 Processing data..."):
         df = load_data(uploaded_file)
 
     if df is None:
+        st.sidebar.info("📅 Latest Date: No data available.")
         return
+
+    # Extract latest available date
+    latest_date = df[df.columns[df.columns.str.lower() == "date"][0]].max().date()
+    st.sidebar.success(f"📅 Latest Date: {latest_date.strftime('%b %d, %Y')}")
 
     col_map = {col.lower(): col for col in df.columns}
     display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
@@ -168,7 +177,6 @@ def main():
             display_cols["procedure/half"]: "sum",
         }).reset_index()
 
-        # Sorted bar charts for total provider performance
         st.subheader("📊 Total Provider Performance")
         col1, col2 = st.columns(2)
         with col1:
