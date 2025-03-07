@@ -1,22 +1,23 @@
 import streamlit as st
 import pandas as pd
+import os
 import plotly.express as px
 
 # ---- Page Configuration ----
 st.set_page_config(page_title="MILV Daily Productivity", layout="wide")
 
 # ---- Constants ----
+FILE_STORAGE_PATH = "latest_rvu.xlsx"
 REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
                     "points/half day", "procedure/half"}
 COLOR_SCALE = "Viridis"
 
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
-def load_data(uploaded_file):
-    """Load and preprocess data from an uploaded Excel file."""
+def load_data(file_path):
+    """Load and preprocess data from an Excel file."""
     try:
-        uploaded_file.seek(0)  # Reset file pointer for re-reads
-        xls = pd.ExcelFile(uploaded_file)
+        xls = pd.ExcelFile(file_path)
         df = xls.parse(xls.sheet_names[0])
 
         # Clean column names (case-insensitive)
@@ -54,16 +55,27 @@ def load_data(uploaded_file):
 def main():
     # Sidebar (including latest uploaded date)
     st.sidebar.image("milv.png", width=200)
+    
+    # File uploader
     uploaded_file = st.sidebar.file_uploader("📤 Upload RVU File", type=["xlsx"])
 
-    # Check if a file is uploaded
-    if not uploaded_file:
+    # Handle file storage
+    if uploaded_file:
+        try:
+            with open(FILE_STORAGE_PATH, "wb") as f:
+                f.write(uploaded_file.getbuffer())  # Save file locally
+            st.session_state["last_uploaded"] = uploaded_file.name  # Store filename in session state
+            st.success(f"✅ {uploaded_file.name} uploaded successfully!")
+        except Exception as e:
+            st.error(f"❌ Upload failed: {str(e)}")
+
+    # Load the latest available file if it exists
+    if os.path.exists(FILE_STORAGE_PATH):
+        with st.spinner("📊 Processing data..."):
+            df = load_data(FILE_STORAGE_PATH)
+    else:
         st.sidebar.info("📅 Latest Date: No data uploaded yet.")
         return st.info("ℹ️ Please upload a file to begin analysis")
-
-    # Load data
-    with st.spinner("📊 Processing data..."):
-        df = load_data(uploaded_file)
 
     if df is None:
         st.sidebar.info("📅 Latest Date: No data available.")
@@ -72,6 +84,10 @@ def main():
     # Extract latest available date
     latest_date = df[df.columns[df.columns.str.lower() == "date"][0]].max().date()
     st.sidebar.success(f"📅 Latest Date: {latest_date.strftime('%b %d, %Y')}")
+
+    # Display last uploaded file name
+    last_uploaded_file = st.session_state.get("last_uploaded", "No file uploaded")
+    st.sidebar.info(f"📂 Last Uploaded File: {last_uploaded_file}")
 
     col_map = {col.lower(): col for col in df.columns}
     display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
@@ -129,87 +145,6 @@ def main():
 
             st.subheader("📋 Detailed Data")
             st.dataframe(filtered_latest, use_container_width=True)
-
-    # ---- Trend Analysis ----
-    with tab2:
-        st.subheader("📈 Date Range Analysis")
-
-        dates = st.date_input(
-            "🗓️ Select Date Range (Start - End)",
-            value=[max_date - pd.DateOffset(days=7), max_date],
-            min_value=min_date,
-            max_value=max_date,
-        )
-
-        if len(dates) != 2 or dates[0] > dates[1]:
-            st.error("❌ Invalid date range")
-            return
-
-        df_range = df[df[display_cols["date"]].between(pd.Timestamp(dates[0]), pd.Timestamp(dates[1]))]
-
-        if df_range.empty:
-            st.warning("⚠️ No data available for the selected range")
-            return
-
-        selected_providers_trend = st.multiselect(
-            "🔍 Select providers:",
-            options=df_range[display_cols["author"]].unique(),
-            default=None,
-            placeholder="Type or select provider...",
-            format_func=lambda x: f"👤 {x}",
-        )
-
-        df_filtered_trend = df_range[df_range[display_cols["author"]].isin(selected_providers_trend)] if selected_providers_trend else df_range
-
-        st.subheader("📊 Overall Performance Trends")
-        fig = px.line(
-            df_filtered_trend.groupby(display_cols["date"]).mean(numeric_only=True).reset_index(),
-            x=display_cols["date"],
-            y=[display_cols["points/half day"], display_cols["procedure/half"]],
-            title="📈 Average Daily Performance Trends",
-            markers=True,
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Aggregate provider-level performance
-        provider_summary = df_filtered_trend.groupby(display_cols["author"]).agg({
-            display_cols["points/half day"]: "sum",
-            display_cols["procedure/half"]: "sum",
-        }).reset_index()
-
-        st.subheader("📊 Total Provider Performance")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(
-                px.bar(
-                    provider_summary.sort_values(display_cols["points/half day"], ascending=False),
-                    x=display_cols["points/half day"],
-                    y=display_cols["author"],
-                    orientation="h",
-                    text=display_cols["points/half day"],
-                    color=display_cols["points/half day"],
-                    color_continuous_scale=COLOR_SCALE,
-                    title="🏆 Total Points per Provider",
-                ),
-                use_container_width=True,
-            )
-        with col2:
-            st.plotly_chart(
-                px.bar(
-                    provider_summary.sort_values(display_cols["procedure/half"], ascending=False),
-                    x=display_cols["procedure/half"],
-                    y=display_cols["author"],
-                    orientation="h",
-                    text=display_cols["procedure/half"],
-                    color=display_cols["procedure/half"],
-                    color_continuous_scale=COLOR_SCALE,
-                    title="⚡ Total Procedures per Provider",
-                ),
-                use_container_width=True,
-            )
-
-        st.subheader("📋 Detailed Data")
-        st.dataframe(df_filtered_trend, use_container_width=True)
 
 if __name__ == "__main__":
     main()
