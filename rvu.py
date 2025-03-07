@@ -80,9 +80,12 @@ def main():
         
         if not df_latest.empty:
             st.subheader("📊 Performance")
+            search = st.text_input("Search providers:")
+            filtered_latest = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
+            
             col1, col2 = st.columns(2)
             with col1:
-                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["points/half day"], ascending=False),
+                st.plotly_chart(px.bar(filtered_latest.sort_values(display_cols["points/half day"], ascending=False),
                                        x=display_cols["points/half day"],
                                        y=display_cols["author"], orientation='h',
                                        text=display_cols["points/half day"],
@@ -91,7 +94,7 @@ def main():
                                        title="Points per Half-Day"),
                                 use_container_width=True)
             with col2:
-                st.plotly_chart(px.bar(df_latest.sort_values(display_cols["procedure/half"], ascending=False),
+                st.plotly_chart(px.bar(filtered_latest.sort_values(display_cols["procedure/half"], ascending=False),
                                        x=display_cols["procedure/half"],
                                        y=display_cols["author"], orientation='h',
                                        text=display_cols["procedure/half"],
@@ -101,9 +104,7 @@ def main():
                                 use_container_width=True)
             
             st.subheader("🔍 Detailed Data")
-            search = st.text_input("Search providers:")
-            filtered = df_latest[df_latest[display_cols["author"]].str.contains(search, case=False)] if search else df_latest
-            st.dataframe(filtered, use_container_width=True)
+            st.dataframe(filtered_latest, use_container_width=True)
     
     with tab2:
         st.subheader("Date Range Analysis")
@@ -130,28 +131,10 @@ def main():
         fig.update_layout(legend_title_text="Metrics")
         st.plotly_chart(fig, use_container_width=True)
         
-        st.subheader("📊 Provider Performance")
-        provider_summary = df_range.groupby(display_cols["author"]).agg({
-            display_cols["points/half day"]: ['sum', 'mean'],
-            display_cols["procedure/half"]: ['sum', 'mean']
-        }).reset_index()
-        provider_summary.columns = ['Author', 'Total Points', 'Avg Points/HD', 'Total Procedures', 'Avg Procedures/HD']
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(px.bar(provider_summary.sort_values("Total Points", ascending=True),
-                                   x="Total Points", y="Author", orientation='h',
-                                   text="Total Points", color="Total Points",
-                                   color_continuous_scale='Viridis',
-                                   title="Total Points per Provider"),
-                            use_container_width=True)
-        with col2:
-            st.plotly_chart(px.bar(provider_summary.sort_values("Avg Points/HD", ascending=True),
-                                   x="Avg Points/HD", y="Author", orientation='h',
-                                   text="Avg Points/HD", color="Avg Points/HD",
-                                   color_continuous_scale='Viridis',
-                                   title="Avg Points per Half-Day per Provider"),
-                            use_container_width=True)
+        st.subheader("🔍 Detailed Data")
+        search_trend = st.text_input("Search providers (Trends):")
+        filtered_range = df_range[df_range[display_cols["author"]].str.contains(search_trend, case=False)] if search_trend else df_range
+        st.dataframe(filtered_range, use_container_width=True)
 
 if __name__ == "__main__":
     main()
