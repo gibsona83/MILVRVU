@@ -152,15 +152,53 @@ def main():
 
         df_filtered_trend = df_range[df_range[display_cols["author"]].isin(selected_providers_trend)] if selected_providers_trend else df_range
 
-        st.subheader("📊 Provider Performance Over Time")
+        st.subheader("📊 Overall Performance Trends")
         fig = px.line(
-            df_filtered_trend,
+            df_filtered_trend.groupby(display_cols["date"]).mean(numeric_only=True).reset_index(),
             x=display_cols["date"],
             y=[display_cols["points/half day"], display_cols["procedure/half"]],
-            title="📈 Performance Trends",
+            title="📈 Average Daily Performance Trends",
             markers=True,
         )
         st.plotly_chart(fig, use_container_width=True)
+
+        # Aggregate provider-level performance
+        provider_summary = df_filtered_trend.groupby(display_cols["author"]).agg({
+            display_cols["points/half day"]: "sum",
+            display_cols["procedure/half"]: "sum",
+        }).reset_index()
+
+        # Sorted bar charts for total provider performance
+        st.subheader("📊 Total Provider Performance")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(
+                px.bar(
+                    provider_summary.sort_values(display_cols["points/half day"], ascending=False),
+                    x=display_cols["points/half day"],
+                    y=display_cols["author"],
+                    orientation="h",
+                    text=display_cols["points/half day"],
+                    color=display_cols["points/half day"],
+                    color_continuous_scale=COLOR_SCALE,
+                    title="🏆 Total Points per Provider",
+                ),
+                use_container_width=True,
+            )
+        with col2:
+            st.plotly_chart(
+                px.bar(
+                    provider_summary.sort_values(display_cols["procedure/half"], ascending=False),
+                    x=display_cols["procedure/half"],
+                    y=display_cols["author"],
+                    orientation="h",
+                    text=display_cols["procedure/half"],
+                    color=display_cols["procedure/half"],
+                    color_continuous_scale=COLOR_SCALE,
+                    title="⚡ Total Procedures per Provider",
+                ),
+                use_container_width=True,
+            )
 
         st.subheader("📋 Detailed Data")
         st.dataframe(df_filtered_trend, use_container_width=True)
