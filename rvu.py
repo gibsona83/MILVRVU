@@ -1,50 +1,49 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os
 
 # ---- Page Configuration ----
 st.set_page_config(page_title="MILV Productivity", layout="wide", page_icon="📊")
 
 # ---- Constants ----
+UPLOAD_FOLDER = "uploaded_data"
+FILE_PATH = os.path.join(UPLOAD_FOLDER, "latest_upload.xlsx")
 REQUIRED_COLUMNS = {"date", "author", "procedure", "points", "shift", 
                     "points/half day", "procedure/half"}
 COLOR_SCALE = 'Viridis'
 
+# Ensure the upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 # ---- Helper Functions ----
 @st.cache_data(show_spinner=False)
-def load_data(uploaded_file):
-    """Load and preprocess data from an uploaded Excel file."""
+def load_data(filepath):
+    """Load and preprocess data from a saved Excel file."""
     try:
-        uploaded_file.seek(0)  # Reset file pointer
-        xls = pd.ExcelFile(uploaded_file)
+        xls = pd.ExcelFile(filepath)
         df = xls.parse(xls.sheet_names[0])
         
         # Clean column names
-        df.columns = df.columns.str.strip()
-        lower_columns = df.columns.str.lower()
+        df.columns = df.columns.str.strip().str.lower()
         
         # Validate required columns
-        missing = [col for col in REQUIRED_COLUMNS if col not in lower_columns]
+        missing = REQUIRED_COLUMNS - set(df.columns)
         if missing:
             st.error(f"❌ Missing columns: {', '.join(missing).title()}")
             return None
         
-        # Map actual column names
-        col_map = {col.lower(): col for col in df.columns}
-        
-        # Process date column
-        date_col = col_map["date"]
-        df[date_col] = pd.to_datetime(df[date_col], errors="coerce").dt.normalize()
-        df.dropna(subset=[date_col], inplace=True)
+        # Convert date column
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+        df.dropna(subset=["date"], inplace=True)
         
         # Convert numeric columns
-        numeric_cols = [col_map[col] for col in REQUIRED_COLUMNS if col not in ["date", "author"]]
+        numeric_cols = list(REQUIRED_COLUMNS - {"date", "author"})
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
         
         # Format author names
-        author_col = col_map["author"]
-        df[author_col] = df[author_col].astype(str).str.strip().str.title()
-        
+        df["author"] = df["author"].astype(str).str.strip().str.title()
+
         return df
     except Exception as e:
         st.error(f"🚨 Error processing file: {str(e)}")
@@ -68,27 +67,36 @@ def main():
     with st.sidebar:
         st.image("milv.png", width=200)
         uploaded_file = st.file_uploader("📤 Upload File", type=["xlsx"], help="XLSX files only")
-    
-    if not uploaded_file:
-        return st.info("📁 Please upload a file to begin analysis")
-    
-    with st.spinner("📊 Processing data..."):
-        df = load_data(uploaded_file)
-    
+
+        if uploaded_file:
+            # Save file to disk
+            with open(FILE_PATH, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.session_state["file_uploaded"] = True  # Mark session as having a new file uploaded
+            st.success("✅ File uploaded successfully!")
+
+    # Load persisted file if available
+    if os.path.exists(FILE_PATH):
+        with st.spinner("📊 Loading data..."):
+            df = load_data(FILE_PATH)
+    else:
+        st.info("📁 No file found. Please upload one.")
+        return
+
     if df is None:
         return
-    
+
     # Column mapping
-    col_map = {col.lower(): col for col in df.columns}
-    display_cols = {k: col_map[k] for k in REQUIRED_COLUMNS}
-    date_col = display_cols["date"]
-    author_col = display_cols["author"]
+    display_cols = {col: col for col in REQUIRED_COLUMNS}
+    date_col, author_col = "date", "author"
 
     # Date range
     min_date, max_date = df[date_col].min().date(), df[date_col].max().date()
 
     # Main interface
     st.title("📈 MILV Productivity Dashboard")
+    st.write(f"📂 Latest Uploaded File: `{FILE_PATH}`")
+
     tab1, tab2 = st.tabs(["📅 Daily Performance", "📈 Trend Analysis"])
 
     # Daily View Tab
