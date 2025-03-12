@@ -17,7 +17,7 @@ COLOR_SCALE = 'Viridis'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ---- Helper Functions ----
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, hash_funcs={pd.DataFrame: lambda _: None})
 def load_data(filepath):
     """Load and preprocess data from a saved Excel file."""
     try:
@@ -33,8 +33,8 @@ def load_data(filepath):
             st.error(f"❌ Missing columns: {', '.join(missing).title()}")
             return None
         
-        # Convert date column
-        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+        # Convert date column & remove time component
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize().dt.tz_localize(None)
         df.dropna(subset=["date"], inplace=True)
         
         # Convert numeric columns
@@ -72,11 +72,14 @@ def main():
             # Save file to disk
             with open(FILE_PATH, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-            st.session_state["file_uploaded"] = True  # Mark session as having a new file uploaded
+            
+            # Clear cache and mark a new file uploaded
+            load_data.clear()
+            st.session_state["file_uploaded"] = True  
             st.success("✅ File uploaded successfully!")
 
-    # Load persisted file if available
-    if os.path.exists(FILE_PATH):
+    # Ensure file exists before loading
+    if os.path.exists(FILE_PATH) and "file_uploaded" in st.session_state:
         with st.spinner("📊 Loading data..."):
             df = load_data(FILE_PATH)
     else:
@@ -92,6 +95,9 @@ def main():
 
     # Date range
     min_date, max_date = df[date_col].min().date(), df[date_col].max().date()
+
+    # Debugging: Ensure max_date is correct
+    st.write(f"🔎 Debug: Max Date in File = {max_date}")
 
     # Main interface
     st.title("📈 MILV Productivity Dashboard")
