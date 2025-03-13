@@ -21,6 +21,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def load_data(filepath):
     """Load and preprocess data from a saved Excel file."""
     try:
+        if not os.path.exists(filepath):
+            return None
+
         xls = pd.ExcelFile(filepath)
         df = xls.parse(xls.sheet_names[0])
         
@@ -30,7 +33,7 @@ def load_data(filepath):
         # Validate required columns
         missing = REQUIRED_COLUMNS - set(df.columns)
         if missing:
-            st.error(f"❌ Missing columns: {', '.join(missing).title()}")
+            st.error(f"❌ Missing columns: {', '.join(missing).title()} in uploaded file.")
             return None
         
         # Convert date column & remove time component
@@ -69,17 +72,16 @@ def main():
         uploaded_file = st.file_uploader("📤 Upload File", type=["xlsx"], help="XLSX files only")
 
         if uploaded_file:
-            # Save file to disk
+            # Save file persistently
             with open(FILE_PATH, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             
-            # Clear cache and mark a new file uploaded
+            # Clear cache to ensure fresh load
             load_data.clear()
-            st.session_state["file_uploaded"] = True  
             st.success("✅ File uploaded successfully!")
 
-    # Ensure file exists before loading
-    if os.path.exists(FILE_PATH) and "file_uploaded" in st.session_state:
+    # Load the last uploaded file if available
+    if os.path.exists(FILE_PATH):
         with st.spinner("📊 Loading data..."):
             df = load_data(FILE_PATH)
     else:
@@ -187,11 +189,6 @@ def main():
             st.plotly_chart(create_bar_chart(df_agg, display_cols["points/half day"], author_col, "🏆 Avg Points/HD", display_cols["points/half day"]), use_container_width=True)
         with col2:
             st.plotly_chart(create_bar_chart(df_agg, display_cols["procedure/half"], author_col, "⚡ Avg Procedures/HD", display_cols["procedure/half"]), use_container_width=True)
-
-        # Trend lines
-        st.subheader("📅 Daily Trends")
-        fig = px.line(df_range.groupby(date_col).mean(numeric_only=True).reset_index(), x=date_col, y=[display_cols["points/half day"], display_cols["procedure/half"]], markers=True, title="Daily Performance Trends")
-        st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
